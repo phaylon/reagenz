@@ -75,8 +75,7 @@ pub trait StrExt {
     fn is_symbol(&self) -> bool {
         let string = self.as_str();
         !string.is_empty()
-        && !string.starts_with('$')
-        && !string.chars().any(|c| c.is_whitespace() || is_reserved_char(c))
+        && string.chars().all(|c| !c.is_whitespace() && !is_reserved_char(c))
     }
 }
 
@@ -89,5 +88,71 @@ impl StrExt for str {
 impl StrExt for SmolStr {
     fn as_str(&self) -> &str {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_variable() {
+        for ok in [
+            "$a",
+            "$abc",
+            "$ab-cd",
+            "$*abcd*",
+            "$+",
+            "$@abc",
+            "$a.b.c",
+            "$a/b/c",
+        ] {
+            assert!(ok.is_variable(), "string {ok:?} should be a valid variable");
+        }
+
+        for fail in [
+            "",
+            "a",
+            "abc$",
+            "$abc$",
+            "$a b",
+            "$a;b",
+            "$a(b",
+            "$a:b",
+            "$a!b",
+            "$a?b",
+        ] {
+            assert!(!fail.is_variable(), "string {fail:?} should not be a valid variable");
+        }
+    }
+
+    #[test]
+    fn is_symbol() {
+        for ok in [
+            "a",
+            "abc",
+            "ab-cd",
+            "*abcd*",
+            "+",
+            "@abc",
+            "a.b.c",
+            "a/b/c",
+        ] {
+            assert!(ok.is_symbol(), "string {ok:?} should be a valid symbol");
+        }
+
+        for fail in [
+            "",
+            "$abc",
+            "abc$",
+            "a b",
+            "a;b",
+            "a(b",
+            "a:b",
+            "a!b",
+            "a?b",
+        ] {
+            assert!(!fail.is_symbol(), "string {fail:?} should not be a valid symbol");
+        }
     }
 }
