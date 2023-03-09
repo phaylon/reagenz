@@ -5,6 +5,7 @@ pub mod loader;
 
 
 pub trait World: 'static {
-    type Value: Clone;
+    type State;
     type Effect;
+    type Value: Clone;
 }

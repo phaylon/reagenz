@@ -266,7 +266,7 @@ where
     Clone(bound=""),
 )]
 pub struct Context<'a, W: World> {
-    world: &'a W,
+    state: &'a W::State,
     system: &'a System<W>,
     mode: ContextMode,
 }
@@ -275,16 +275,16 @@ impl<'a, W> Context<'a, W>
 where
     W: World,
 {
-    pub fn new(world: &'a W, system: &'a System<W>, mode: ContextMode) -> Self {
-        Self { world, system, mode }
+    pub fn new(state: &'a W::State, system: &'a System<W>, mode: ContextMode) -> Self {
+        Self { state, system, mode }
     }
 
     pub fn system(&self) -> &'a System<W> {
         self.system
     }
 
-    pub fn world(&self) -> &'a W {
-        self.world
+    pub fn state(&self) -> &'a W::State {
+        self.state
     }
 
     pub fn is_active(&self) -> bool {
@@ -293,7 +293,7 @@ where
 
     pub fn to_inactive(&self) -> Self {
         Self {
-            world: self.world,
+            state: self.state,
             system: self.system,
             mode: ContextMode::Inactive,
         }
