@@ -6,8 +6,9 @@ use crate::World;
 
 pub type ValueIter<W> = dyn Iterator<Item = Value<W>>;
 
-#[derive(Clone, Derivative)]
+#[derive(Derivative)]
 #[derivative(
+    Clone(bound=""),
     Debug(bound="W::Value: std::fmt::Debug"),
     PartialEq(bound="W::Value: PartialEq"),
 )]
