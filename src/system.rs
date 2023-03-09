@@ -7,7 +7,7 @@ use smol_str::SmolStr;
 
 use crate::World;
 use crate::loader::{LoadError, load_str};
-use crate::value::{Value, ValueIter};
+use crate::value::{Value, ValueIter, StrExt};
 
 
 type SymbolMap = HashMap<SmolStr, (usize, SymbolInfo)>;
@@ -39,6 +39,14 @@ where
 
     pub fn is_failure(&self) -> bool {
         matches!(self, Self::Failure)
+    }
+
+    pub fn is_non_success(&self) -> bool {
+        !self.is_success()
+    }
+
+    pub fn is_non_failure(&self) -> bool {
+        !self.is_failure()
     }
 
     pub fn action(&self) -> Option<&Action<W>> {
@@ -212,7 +220,9 @@ fn register_symbol_hook<W, R>(
 where
     W: World,
 {
-    if let Some((_, previous)) = symbols.get(&name).cloned() {
+    if !name.is_symbol() {
+        Err(SystemSymbolError::Invalid)
+    } else if let Some((_, previous)) = symbols.get(&name).cloned() {
         Err(SystemSymbolError::Conflict { previous, current: info })
     } else {
         let index = hooks.len();
@@ -346,6 +356,7 @@ pub struct ArityMismatch {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SystemSymbolError {
+    Invalid,
     Conflict {
         previous: SymbolInfo,
         current: SymbolInfo,

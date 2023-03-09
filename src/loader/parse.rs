@@ -1,9 +1,11 @@
-use std::ops::Not;
 
 use ramble::{Item, Node};
 use smol_str::SmolStr;
 
-use super::{MARK_DECLARE, CompileErrorKind, CompileError, MARK_GOAL, MARK_QUERY};
+use crate::value::StrExt;
+
+use super::{CompileErrorKind, CompileError};
+use super::mark;
 
 
 pub(super) fn require_ref_declaration(
@@ -39,12 +41,12 @@ pub(super) fn match_raw_ref(items: &[Item]) -> Option<(&Item, &[Item])> {
 
 pub(super) fn match_symbol(item: &Item) -> Option<&SmolStr> {
     let word = item.word()?;
-    word.starts_with('$').not().then_some(word)
+    word.is_symbol().then_some(word)
 }
 
 pub(super) fn match_variable(item: &Item) -> Option<&SmolStr> {
     let word = item.word()?;
-    word.starts_with('$').then_some(word)
+    word.is_variable().then_some(word)
 }
 
 pub(super) fn match_group_directive<'a>(
@@ -55,7 +57,7 @@ pub(super) fn match_group_directive<'a>(
         return Ok(false);
     };
     if !rest.is_empty() || !items.is_empty() {
-        return Err(CompileErrorKind::DirectiveSyntax(keyword).at(node));
+        return Err(CompileErrorKind::InvalidDirectiveSyntax(keyword).at(node));
     }
     Ok(true)
 }
@@ -70,7 +72,7 @@ pub(super) fn match_directive<'a>(
     if !match_word(first, keyword) {
         return Ok(None);
     }
-    let Some(index) = rest.iter().position(|item| match_punctuation(item, MARK_DECLARE)) else {
+    let Some(index) = rest.iter().position(|item| match_punctuation(item, mark::DECLARE)) else {
         return Err(CompileErrorKind::InvalidDirectiveForm.at(node));
     };
     Ok(Some((&rest[..index], &rest[(index + 1)..])))

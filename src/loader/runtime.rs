@@ -45,7 +45,7 @@ where
             Self::Select { branches } => {
                 for branch in branches {
                     let result = branch.eval(ctx, vars);
-                    if !result.is_failure() {
+                    if result.is_non_failure() {
                         return result;
                     }
                 }
@@ -54,16 +54,19 @@ where
             Self::Sequence { branches } => {
                 for branch in branches {
                     let result = branch.eval(ctx, vars);
-                    if !result.is_success() {
+                    if result.is_non_success() {
                         return result;
                     }
                 }
                 Outcome::Success
             },
             Self::Ref { node, arguments, is_active } => {
-                let ctx = if !is_active { ctx.to_inactive() } else { ctx.clone() };
                 let arguments = reify_values(arguments, vars);
-                ctx.run_raw(*node, &arguments)
+                if *is_active {
+                    ctx.run_raw(*node, &arguments)
+                } else {
+                    ctx.to_inactive().run_raw(*node, &arguments)
+                }
             },
         }
     }

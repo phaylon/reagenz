@@ -3,6 +3,7 @@ use smol_str::SmolStr;
 use num_traits::NumCast;
 
 use crate::World;
+use crate::loader::is_reserved_char;
 
 
 pub type ValueIter<W> = dyn Iterator<Item = Value<W>>;
@@ -59,4 +60,34 @@ where
 
     fn_convert_num!(to_i64, i64);
     fn_convert_num!(to_f64, f64);
+}
+
+pub trait StrExt {
+    fn as_str(&self) -> &str;
+
+    fn is_variable(&self) -> bool {
+        let string = self.as_str();
+        string.len() > 1
+        && string.starts_with('$')
+        && string[1..].is_symbol()
+    }
+
+    fn is_symbol(&self) -> bool {
+        let string = self.as_str();
+        !string.is_empty()
+        && !string.starts_with('$')
+        && !string.chars().any(|c| c.is_whitespace() || is_reserved_char(c))
+    }
+}
+
+impl StrExt for str {
+    fn as_str(&self) -> &str {
+        self
+    }
+}
+
+impl StrExt for SmolStr {
+    fn as_str(&self) -> &str {
+        self
+    }
 }

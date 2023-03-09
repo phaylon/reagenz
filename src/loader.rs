@@ -16,12 +16,7 @@ mod parse;
 mod compile;
 mod runtime;
 mod kw;
-
-const MARK_QUERY: char = '?';
-const MARK_GOAL: char = '!';
-const MARK_DECLARE: char = ':';
-
-const PUNCTUATION: &[char] = &[MARK_QUERY, MARK_GOAL, MARK_DECLARE];
+mod mark;
 
 pub(crate) fn load_str<W>(
     content: &str,
@@ -31,7 +26,7 @@ pub(crate) fn load_str<W>(
 where
     W: World,
 {
-    let tree = Tree::parse(content, PUNCTUATION).map_err(LoadError::Tree)?;
+    let tree = Tree::parse(content, mark::MARKS).map_err(LoadError::Tree)?;
 
     let mut node_decls = Vec::new();
     for node in &tree.nodes {
@@ -51,6 +46,7 @@ where
     Ok(system)
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum LoadError {
     Tree(ramble::ParseError),
     Compile(CompileError),
@@ -62,18 +58,20 @@ impl From<CompileError> for LoadError {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct CompileError {
     pub kind: CompileErrorKind,
     pub location: NodeLocation,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum CompileErrorKind {
     Unrecognized,
     InvalidDirectiveForm,
     InvalidDeclaration,
     InvalidNodeDeclaration,
     SystemSymbol(SystemSymbolError),
-    DirectiveSyntax(&'static str),
+    InvalidDirectiveSyntax(&'static str),
     InvalidRefSyntax,
     InvalidEffectRefSyntax,
     ShadowedVariable(SmolStr, Span),
@@ -134,4 +132,9 @@ impl<'a> Declaration<'a> {
             kind,
         })
     }
+}
+
+pub(crate) fn is_reserved_char(c: char) -> bool {
+    mark::MARKS.contains(&c)
+    || ['$', '(', ')', '[', ']', '{', '}', ';'].contains(&c)
 }
