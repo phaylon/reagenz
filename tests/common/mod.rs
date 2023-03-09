@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 
 pub fn realign(content: &str) -> String {
     let common = content.lines()

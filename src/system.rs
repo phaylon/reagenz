@@ -57,6 +57,10 @@ where
             None
         }
     }
+
+    pub fn effects(&self) -> Option<&[W::Effect]> {
+        self.action().map(|a| a.effects.as_slice())
+    }
 }
 
 impl<W> From<bool> for Outcome<W>
