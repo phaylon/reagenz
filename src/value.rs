@@ -1,5 +1,6 @@
 use derivative::Derivative;
 use smol_str::SmolStr;
+use num_traits::NumCast;
 
 use crate::World;
 
@@ -14,99 +15,48 @@ pub type ValueIter<W> = dyn Iterator<Item = Value<W>>;
 )]
 pub enum Value<W: World> {
     Ext(W::Value),
-    Symbol(Symbol),
+    Symbol(SmolStr),
     Int(i64),
     Float(f64),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum SymbolError {
-    Empty,
-    Whitespace,
-}
+macro_rules! fn_access {
+    ($variant:ident, $access:ty, $pred:ident, $getter:ident, |$value:ident| $get:expr $(,)?) => {
+        pub fn $getter(&self) -> Option<$access> {
+            if let Self::$variant($value) = self {
+                Some($get)
+            } else {
+                None
+            }
+        }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Symbol(SmolStr);
-
-impl Symbol {
-    pub fn verify(value: &str) -> Result<(), SymbolError> {
-        if value.is_empty() {
-            Err(SymbolError::Empty)
-        } else if value.chars().any(char::is_whitespace) {
-            Err(SymbolError::Whitespace)
-        } else {
-            Ok(())
+        pub fn $pred(&self) -> bool {
+            matches!(self, Self::$variant(_))
         }
     }
+}
 
-    pub fn new<T>(value: T) -> Result<Self, SymbolError>
-    where
-        T: Into<SmolStr> + AsRef<str>,
-    {
-        Self::verify(value.as_ref())?;
-        Ok(Self(value.into()))
+macro_rules! fn_convert_num {
+    ($name:ident, $output:ty $(,)?) => {
+        pub fn $name(&self) -> Option<$output> {
+            match self {
+                Self::Int(i) => NumCast::from(*i),
+                Self::Float(f) => NumCast::from(*f),
+                _ => None,
+            }
+        }
     }
 }
 
-impl std::fmt::Debug for Symbol {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.as_str().fmt(f)
-    }
-}
+impl<W> Value<W>
+where
+    W: World,
+{
+    fn_access!(Ext, &W::Value, is_ext, ext, |ext| ext);
+    fn_access!(Symbol, &SmolStr, is_symbol, symbol, |sym| sym);
+    fn_access!(Int, i64, is_int, int, |i| *i);
+    fn_access!(Float, f64, is_float, float, |f| *f);
 
-impl std::fmt::Display for Symbol {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.as_str().fmt(f)
-    }
-}
-
-impl std::borrow::Borrow<str> for Symbol {
-    fn borrow(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl AsRef<str> for Symbol {
-    fn as_ref(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl std::ops::Deref for Symbol {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_str()
-    }
-}
-
-impl TryFrom<&str> for Symbol {
-    type Error = SymbolError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Self::new(value)
-    }
-}
-
-impl TryFrom<&SmolStr> for Symbol {
-    type Error = SymbolError;
-
-    fn try_from(value: &SmolStr) -> Result<Self, Self::Error> {
-        Self::verify(value)?;
-        Ok(Self(value.clone()))
-    }
-}
-
-impl From<&Symbol> for Symbol {
-    fn from(value: &Symbol) -> Self {
-        value.clone()
-    }
-}
-
-impl TryFrom<std::borrow::Cow<'_, str>> for Symbol {
-    type Error = SymbolError;
-
-    fn try_from(value: std::borrow::Cow<'_, str>) -> Result<Self, Self::Error> {
-        Self::new(value)
-    }
+    fn_convert_num!(to_i64, i64);
+    fn_convert_num!(to_f64, f64);
 }

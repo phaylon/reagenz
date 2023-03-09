@@ -7,7 +7,6 @@ use crate::system::{
     System, SymbolSourceProto, SystemSymbolError, SymbolSource, SymbolInfo, SymbolKind,
     ArityMismatch,
 };
-use crate::value::Symbol;
 
 use self::parse::{require_ref_declaration, match_directive};
 use self::compile::compile_declaration;
@@ -120,7 +119,7 @@ impl<'a> Declaration<'a> {
         }
     }
 
-    fn symbol_info(&self, source: SymbolSource) -> (Symbol, SymbolInfo) {
+    fn symbol_info(&self, source: SymbolSource) -> (SmolStr, SymbolInfo) {
         let (name, parameters, kind) = match *self {
             Declaration::Node { name, parameters, .. } => {
                 (name, parameters, SymbolKind::Node)
@@ -129,7 +128,7 @@ impl<'a> Declaration<'a> {
                 (name, parameters, SymbolKind::Action)
             },
         };
-        (name.try_into().unwrap(), SymbolInfo {
+        (name.clone(), SymbolInfo {
             source: source,
             arity: parameters.len(),
             kind,

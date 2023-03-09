@@ -233,7 +233,7 @@ where
         if let Some(var) = match_variable(item) {
             values.push(NodeValue::Variable(env.find(var, item, node)?));
         } else if let Some(sym) = match_symbol(item) {
-            values.push(NodeValue::Value(Value::Symbol(sym.try_into().unwrap())));
+            values.push(NodeValue::Value(Value::Symbol(sym.clone())));
         } else if let Some(num) = item.num() {
             values.push(NodeValue::Value(match num {
                 ramble::Num::Int(i) => Value::Int(i),

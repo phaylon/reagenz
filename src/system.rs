@@ -3,13 +3,14 @@ use std::path::Path;
 use std::sync::Arc;
 
 use derivative::Derivative;
+use smol_str::SmolStr;
 
 use crate::World;
 use crate::loader::{LoadError, load_str};
-use crate::value::{Symbol, Value, ValueIter};
+use crate::value::{Value, ValueIter};
 
 
-type SymbolMap = HashMap<Symbol, (usize, SymbolInfo)>;
+type SymbolMap = HashMap<SmolStr, (usize, SymbolInfo)>;
 
 pub(crate) type NodeHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Outcome<W>;
 pub(crate) type EffectHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<<W as World>::Effect>;
@@ -86,7 +87,7 @@ where
         load_str(content, self, SymbolSourceProto::Api)
     }
 
-    pub fn symbols(&self) -> impl Iterator<Item = &Symbol> + '_ {
+    pub fn symbols(&self) -> impl Iterator<Item = &SmolStr> + '_ {
         self.symbols.keys()
     }
 
@@ -107,7 +108,7 @@ where
         body: F,
     ) -> Result<(), SystemSymbolError>
     where
-        S: Into<Symbol>,
+        S: Into<SmolStr>,
         F: Fn(&Context<'_, W>, &[Value<W>; N]) -> Option<W::Effect> + 'static,
     {
         register_api_symbol(
@@ -126,7 +127,7 @@ where
         body: F,
     ) -> Result<(), SystemSymbolError>
     where
-        S: Into<Symbol>,
+        S: Into<SmolStr>,
         F: Fn(&Context<'_, W>, &[Value<W>; N]) -> Box<ValueIter<W>> + 'static,
     {
         register_api_symbol(
@@ -145,7 +146,7 @@ where
         body: F,
     ) -> Result<(), SystemSymbolError>
     where
-        S: Into<Symbol>,
+        S: Into<SmolStr>,
         F: Fn(&Context<'_, W>, &[Value<W>; N]) -> Option<Value<W>> + 'static,
     {
         register_api_symbol(
@@ -164,7 +165,7 @@ where
         body: F,
     ) -> Result<(), SystemSymbolError>
     where
-        S: Into<Symbol>,
+        S: Into<SmolStr>,
         F: Fn(&Context<'_, W>, &[Value<W>; N]) -> Outcome<W> + 'static,
     {
         register_api_symbol(
@@ -179,7 +180,7 @@ where
 
     pub(crate) fn register_node_raw(
         &mut self,
-        name: Symbol,
+        name: SmolStr,
         info: SymbolInfo,
         hook: Box<NodeHook<W>>,
     ) -> Result<(), SystemSymbolError> {
@@ -204,7 +205,7 @@ where
 fn register_symbol_hook<W, R>(
     symbols: &mut SymbolMap,
     hooks: &mut Vec<Box<dyn Fn(&Context<'_, W>, &[Value<W>]) -> R>>,
-    name: Symbol,
+    name: SmolStr,
     info: SymbolInfo,
     hook: Box<dyn Fn(&Context<'_, W>, &[Value<W>]) -> R>,
 ) -> Result<(), SystemSymbolError>
@@ -225,7 +226,7 @@ fn register_api_symbol<W, R, F, const N: usize>(
     symbols: &mut SymbolMap,
     hooks: &mut Vec<Box<dyn Fn(&Context<'_, W>, &[Value<W>]) -> R>>,
     source: SymbolSource,
-    name: Symbol,
+    name: SmolStr,
     kind: SymbolKind,
     body: F,
 ) -> Result<(), SystemSymbolError>
