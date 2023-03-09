@@ -26,8 +26,8 @@ pub(super) fn match_node_ref(items: &[Item]) -> Option<(&Item, bool, &[Item])> {
     match_symbol(name_item)?;
     let (mark, items) = items.split_first()?;
     let is_active = match mark.punctuation()? {
-        MARK_GOAL => Some(true),
-        MARK_QUERY => Some(false),
+        mark::GOAL => Some(true),
+        mark::QUERY => Some(false),
         _ => None,
     }?;
     Some((name_item, is_active, items))
