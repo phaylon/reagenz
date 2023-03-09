@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use derivative::Derivative;
 use smol_str::SmolStr;
+use walkdir::WalkDir;
 
 use crate::World;
 use crate::loader::{LoadError, load_str};
@@ -106,6 +107,45 @@ where
 
     pub fn load_from_str(self, content: &str) -> Result<Self, LoadError> {
         load_str(content, self, SymbolSourceProto::Api)
+    }
+
+    pub fn load_from_file<P>(self, path: P) -> Result<Self, FileLoadError>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        let content = std::fs::read_to_string(path).map_err(|error| {
+            FileLoadError {
+                path: path.into(),
+                kind: FileLoadErrorKind::Read(Arc::new(error)),
+            }
+        })?;
+        load_str(&content, self, SymbolSourceProto::File { path: path.into() }).map_err(|error| {
+            FileLoadError {
+                path: path.into(),
+                kind: FileLoadErrorKind::Load(error),
+            }
+        })
+    }
+
+    pub fn load_from_directory<P>(mut self, path: P) -> Result<Self, FileLoadError>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        'entries: for entry in WalkDir::new(path) {
+            let entry = entry.map_err(|error| {
+                FileLoadError {
+                    path: path.into(),
+                    kind: FileLoadErrorKind::Walk(Arc::new(error)),
+                }
+            })?;
+            if !entry.file_name().to_str().map_or(false, |f| f.ends_with(".rea")) {
+                continue 'entries;
+            }
+            self = self.load_from_file(entry.path())?;
+        }
+        Ok(self)
     }
 
     pub fn symbols(&self) -> impl Iterator<Item = &SmolStr> + '_ {
@@ -221,6 +261,19 @@ where
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct FileLoadError {
+    pub kind: FileLoadErrorKind,
+    pub path: Arc<Path>,
+}
+
+#[derive(Debug, Clone)]
+pub enum FileLoadErrorKind {
+    Walk(Arc<walkdir::Error>),
+    Read(Arc<std::io::Error>),
+    Load(LoadError),
 }
 
 fn register_symbol_hook<W, R>(
