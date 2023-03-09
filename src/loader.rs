@@ -3,7 +3,10 @@ use ramble::{Tree, Node, NodeLocation, Item, Span};
 use smol_str::SmolStr;
 
 use crate::World;
-use crate::system::{System, SymbolSourceProto, SystemSymbolError, SymbolSource, SymbolInfo, SymbolKind, ArityMismatch};
+use crate::system::{
+    System, SymbolSourceProto, SystemSymbolError, SymbolSource, SymbolInfo, SymbolKind,
+    ArityMismatch,
+};
 use crate::value::Symbol;
 
 use self::parse::{require_ref_declaration, match_directive};

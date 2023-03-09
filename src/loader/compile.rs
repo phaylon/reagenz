@@ -8,8 +8,10 @@ use crate::World;
 use crate::system::{System, NodeHook, SymbolKind, ArityMismatch, Outcome, Action};
 use crate::value::{Value};
 
-use super::parse::{match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref};
-use super::runtime::{NodeBranch, NodeValue, EffectRef};
+use super::parse::{
+    match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref,
+};
+use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace};
 use super::{Declaration, CompileError, CompileErrorKind};
 use super::kw;
 
@@ -62,15 +64,15 @@ where
         ))
     })?;
 
-    let vars = RefCell::new(Vec::with_capacity(env.max_len));
     let name = curr.name.clone();
+    let var_len = env.max_len;
 
     Ok(Box::new(move |ctx, arguments| {
         assert_eq!(arguments.len(), arity, "arity mismatch reached `{}`", name);
         if !ctx.is_active() {
             return Outcome::Failure;
         }
-        let mut vars = vars.borrow_mut();
+        let mut vars = VarSpace::with_capacity(var_len);
         vars.clear();
         vars.extend(arguments.iter().cloned());
         if !required.eval(&ctx.to_inactive(), &mut vars).is_success() {
@@ -100,12 +102,12 @@ where
         Ok(NodeBranch::Sequence { branches })
     })?;
 
-    let vars = RefCell::new(Vec::with_capacity(env.max_len));
     let name = curr.name.clone();
+    let var_len = env.max_len;
 
     Ok(Box::new(move |ctx, arguments| {
         assert_eq!(arguments.len(), arity, "arity mismatch reached `{}`", name);
-        let mut vars = vars.borrow_mut();
+        let mut vars = VarSpace::with_capacity(var_len);
         vars.clear();
         vars.extend(arguments.iter().cloned());
         logic.eval(ctx, &mut vars)

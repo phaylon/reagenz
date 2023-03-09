@@ -5,6 +5,8 @@ use crate::system::{Context, Outcome};
 use crate::value::Value;
 
 
+pub(super) type VarSpace<W> = SmallVec<[Value<W>; 16]>;
+
 pub(super) struct EffectRef<W: World> {
     pub effect: usize,
     pub arguments: Vec<NodeValue<W>>,
@@ -14,7 +16,7 @@ impl<W> EffectRef<W>
 where
     W: World,
 {
-    pub(super) fn eval(&self, ctx: &Context<'_, W>, vars: &mut Vec<Value<W>>) -> Option<W::Effect> {
+    pub(super) fn eval(&self, ctx: &Context<'_, W>, vars: &mut VarSpace<W>) -> Option<W::Effect> {
         let arguments = reify_values(&self.arguments, vars);
         ctx.effect_raw(self.effect, &arguments)
     }
@@ -38,7 +40,7 @@ impl<W> NodeBranch<W>
 where
     W: World,
 {
-    pub(super) fn eval(&self, ctx: &Context<'_, W>, vars: &mut Vec<Value<W>>) -> Outcome<W> {
+    pub(super) fn eval(&self, ctx: &Context<'_, W>, vars: &mut VarSpace<W>) -> Outcome<W> {
         match self {
             Self::Select { branches } => {
                 for branch in branches {
