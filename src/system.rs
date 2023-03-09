@@ -58,6 +58,19 @@ where
     }
 }
 
+impl<W> From<bool> for Outcome<W>
+where
+    W: World,
+{
+    fn from(value: bool) -> Self {
+        if value {
+            Self::Success
+        } else {
+            Self::Failure
+        }
+    }
+}
+
 #[derive(Derivative)]
 #[derivative(
     Default(bound=""),
@@ -275,8 +288,8 @@ impl<'a, W> Context<'a, W>
 where
     W: World,
 {
-    pub fn new(state: &'a W::State, system: &'a System<W>, mode: ContextMode) -> Self {
-        Self { state, system, mode }
+    pub fn new(state: &'a W::State, system: &'a System<W>) -> Self {
+        Self { state, system, mode: ContextMode::Active }
     }
 
     pub fn system(&self) -> &'a System<W> {
@@ -315,23 +328,47 @@ where
         self.system.effects[index](self, arguments)
     }
 
-    pub fn run<T>(&self, node: T, arguments: &[Value<W>]) -> Result<Outcome<W>, RunError>
-    where
-        T: AsRef<str>,
-    {
-        let Some((index, info)) = self.system.symbols.get(node.as_ref()) else {
+    fn resolve_symbol(
+        &self,
+        name: &str,
+        arity: usize,
+        accepted: &[SymbolKind],
+    ) -> Result<(usize, SymbolKind), RunError> {
+        let Some((index, info)) = self.system.symbols.get(name) else {
             return Err(RunError::Unknown);
         };
-        if info.kind != SymbolKind::Node {
+        if !accepted.contains(&info.kind) {
             return Err(RunError::Kind(info.kind));
         }
-        if arguments.len() != info.arity {
+        if arity != info.arity {
             return Err(RunError::Arity(ArityMismatch {
                 expected: info.arity,
-                received: arguments.len(),
+                received: arity,
             }));
         }
-        Ok(self.run_raw(*index, arguments))
+        Ok((*index, info.kind))
+    }
+
+    pub fn effect(&self, name: &str, arguments: &[Value<W>]) -> Result<Option<W::Effect>, RunError> {
+        let accepted = &[SymbolKind::Effect];
+        let (index, _) = self.resolve_symbol(name.as_ref(), arguments.len(), accepted)?;
+        Ok(self.effect_raw(index, arguments))
+    }
+
+    pub fn run(&self, name: &str, arguments: &[Value<W>]) -> Result<Outcome<W>, RunError> {
+        let accepted = &[SymbolKind::Node, SymbolKind::Action];
+        let (index, _) = self.resolve_symbol(name.as_ref(), arguments.len(), accepted)?;
+        Ok(self.run_raw(index, arguments))
+    }
+
+    pub fn query(&self, name: &str, arguments: &[Value<W>]) -> Result<Box<ValueIter<W>>, RunError> {
+        let accepted = &[SymbolKind::Query, SymbolKind::Getter];
+        let (index, kind) = self.resolve_symbol(name.as_ref(), arguments.len(), accepted)?;
+        match kind {
+            SymbolKind::Query => Ok(self.query_raw(index, arguments)),
+            SymbolKind::Getter => Ok(Box::new(self.get_raw(index, arguments).into_iter())),
+            _ => unreachable!(),
+        }
     }
 }
 

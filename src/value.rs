@@ -62,6 +62,23 @@ where
     fn_convert_num!(to_f64, f64);
 }
 
+macro_rules! impl_value_from {
+    ($source:ty, |$value:ident| $create:expr) => {
+        impl<W> From<$source> for Value<W> where W: World {
+            fn from($value: $source) -> Self {
+                $create
+            }
+        }
+    }
+}
+
+impl_value_from!(i64, |v| Self::Int(v));
+impl_value_from!(i32, |v| Self::Int(v.into()));
+impl_value_from!(f64, |v| Self::Float(v));
+impl_value_from!(f32, |v| Self::Float(v.into()));
+impl_value_from!(SmolStr, |v| Self::Symbol(v));
+impl_value_from!(&SmolStr, |v| Self::Symbol(v.clone()));
+
 pub trait StrExt {
     fn as_str(&self) -> &str;
 
