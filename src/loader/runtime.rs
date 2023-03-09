@@ -1,7 +1,7 @@
 use smallvec::SmallVec;
 
 use crate::World;
-use crate::system::{Context, Outcome};
+use crate::system::{Context, Outcome, ContextMode};
 use crate::value::Value;
 
 
@@ -32,7 +32,7 @@ pub(super) enum NodeBranch<W: World> {
     Ref {
         node: usize,
         arguments: Vec<NodeValue<W>>,
-        is_active: bool,
+        mode: ContextMode,
     },
 }
 
@@ -60,9 +60,9 @@ where
                 }
                 Outcome::Success
             },
-            Self::Ref { node, arguments, is_active } => {
+            Self::Ref { node, arguments, mode } => {
                 let arguments = reify_values(arguments, vars);
-                if *is_active {
+                if mode.is_active() {
                     ctx.run_raw(*node, &arguments)
                 } else {
                     ctx.to_inactive().run_raw(*node, &arguments)

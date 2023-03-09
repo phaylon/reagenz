@@ -158,12 +158,12 @@ where
     } else if match_group_directive(node, kw::SELECT)? {
         let branches = compile_node_branches(curr, env, &node.nodes)?;
         Ok(NodeBranch::Select { branches })
-    } else if let Some((name, is_active, arguments)) = match_node_ref(&node.items) {
+    } else if let Some((name, mode, arguments)) = match_node_ref(&node.items) {
         let arguments = compile_values(env, node, arguments)?;
         ensure_leaf_node(node)?;
         let accepted = &[SymbolKind::Node, SymbolKind::Action];
         let node = resolve_symbol(curr, node, name, accepted, arguments.len())?;
-        Ok(NodeBranch::Ref { node, arguments, is_active })
+        Ok(NodeBranch::Ref { node, arguments, mode })
     } else {
         Err(CompileErrorKind::Unrecognized.at(node))
     }

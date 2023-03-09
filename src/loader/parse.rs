@@ -2,6 +2,7 @@
 use ramble::{Item, Node};
 use smol_str::SmolStr;
 
+use crate::system::ContextMode;
 use crate::value::StrExt;
 
 use super::{CompileErrorKind, CompileError};
@@ -21,13 +22,13 @@ pub(super) fn match_ref_declaration(items: &[Item]) -> Option<(&SmolStr, &[Item]
     Some((name, parameters))
 }
 
-pub(super) fn match_node_ref(items: &[Item]) -> Option<(&Item, bool, &[Item])> {
+pub(super) fn match_node_ref(items: &[Item]) -> Option<(&Item, ContextMode, &[Item])> {
     let (name_item, items) = items.split_first()?;
     match_symbol(name_item)?;
     let (mark, items) = items.split_first()?;
     let is_active = match mark.punctuation()? {
-        mark::GOAL => Some(true),
-        mark::QUERY => Some(false),
+        mark::GOAL => Some(ContextMode::Active),
+        mark::QUERY => Some(ContextMode::Inactive),
         _ => None,
     }?;
     Some((name_item, is_active, items))

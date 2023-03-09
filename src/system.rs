@@ -341,6 +341,12 @@ pub enum ContextMode {
     Inactive,
 }
 
+impl ContextMode {
+    pub fn is_active(&self) -> bool {
+        matches!(self, Self::Active)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RunError {
     Unknown,
