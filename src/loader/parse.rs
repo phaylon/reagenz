@@ -21,7 +21,7 @@ pub(super) fn match_ref_declaration(items: &[Item]) -> Option<(&SmolStr, &[Item]
 
 pub(super) fn match_node_ref(items: &[Item]) -> Option<(&Item, bool, &[Item])> {
     let (name_item, items) = items.split_first()?;
-    let name = match_symbol(name_item)?;
+    match_symbol(name_item)?;
     let (mark, items) = items.split_first()?;
     let is_active = match mark.punctuation()? {
         MARK_GOAL => Some(true),
@@ -33,8 +33,7 @@ pub(super) fn match_node_ref(items: &[Item]) -> Option<(&Item, bool, &[Item])> {
 
 pub(super) fn match_raw_ref(items: &[Item]) -> Option<(&Item, &[Item])> {
     let (name_item, items) = items.split_first()?;
-    let name = match_symbol(name_item)?;
-    let (mark, items) = items.split_first()?;
+    match_symbol(name_item)?;
     Some((name_item, items))
 }
 

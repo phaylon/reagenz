@@ -1,4 +1,3 @@
-use std::ops::Not;
 
 use ramble::{Tree, Node, NodeLocation, Item, Span};
 use smol_str::SmolStr;

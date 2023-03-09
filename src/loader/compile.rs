@@ -2,11 +2,10 @@
 use std::cell::RefCell;
 
 use ramble::{Node, Item};
-use smallvec::SmallVec;
 use smol_str::SmolStr;
 
 use crate::World;
-use crate::system::{System, NodeHook, SymbolKind, ArityMismatch, Context, Outcome, Action};
+use crate::system::{System, NodeHook, SymbolKind, ArityMismatch, Outcome, Action};
 use crate::value::{Value};
 
 use super::parse::{match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref};
@@ -23,7 +22,7 @@ where
 {
     match decl {
         Declaration::Node { name, parameters, node } => {
-            todo!()
+            compile_node(&Current { name, top: node, system }, parameters)
         },
         Declaration::Action { name, parameters, node } => {
             compile_action(&Current { name, top: node, system }, parameters)
@@ -122,7 +121,7 @@ where
     W: World,
 {
     if let Some((name, arguments)) = match_raw_ref(&node.items) {
-        let arguments = compile_values(curr, env, node, arguments)?;
+        let arguments = compile_values(env, node, arguments)?;
         ensure_leaf_node(node)?;
         let accepted = &[SymbolKind::Effect];
         let effect = resolve_symbol(curr, node, name, accepted, arguments.len())?;
@@ -162,7 +161,7 @@ where
         let branches = compile_node_branches(curr, env, &node.nodes)?;
         Ok(NodeBranch::Select { branches })
     } else if let Some((name, is_active, arguments)) = match_node_ref(&node.items) {
-        let arguments = compile_values(curr, env, node, arguments)?;
+        let arguments = compile_values(env, node, arguments)?;
         ensure_leaf_node(node)?;
         let accepted = &[SymbolKind::Node, SymbolKind::Action];
         let node = resolve_symbol(curr, node, name, accepted, arguments.len())?;
@@ -224,7 +223,6 @@ where
 }
 
 fn compile_values<'a, W>(
-    curr: &Current<'_, W>,
     env: &mut Env,
     node: &Node,
     items: impl IntoIterator<Item = &'a Item>,
