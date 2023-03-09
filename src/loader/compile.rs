@@ -1,6 +1,4 @@
 
-use std::cell::RefCell;
-
 use ramble::{Node, Item};
 use smol_str::SmolStr;
 
@@ -68,12 +66,11 @@ where
     let var_len = env.max_len;
 
     Ok(Box::new(move |ctx, arguments| {
-        assert_eq!(arguments.len(), arity, "arity mismatch reached `{}`", name);
+        assert_eq!(arguments.len(), arity, "arity mismatch reached effect `{}`", name);
         if !ctx.is_active() {
             return Outcome::Failure;
         }
         let mut vars = VarSpace::with_capacity(var_len);
-        vars.clear();
         vars.extend(arguments.iter().cloned());
         if !required.eval(&ctx.to_inactive(), &mut vars).is_success() {
             return Outcome::Failure;
@@ -106,9 +103,8 @@ where
     let var_len = env.max_len;
 
     Ok(Box::new(move |ctx, arguments| {
-        assert_eq!(arguments.len(), arity, "arity mismatch reached `{}`", name);
+        assert_eq!(arguments.len(), arity, "arity mismatch reached node `{}`", name);
         let mut vars = VarSpace::with_capacity(var_len);
-        vars.clear();
         vars.extend(arguments.iter().cloned());
         logic.eval(ctx, &mut vars)
     }))
