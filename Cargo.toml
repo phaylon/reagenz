@@ -13,6 +13,8 @@ scopeguard = "1.1.0"
 smallvec = { version = "1.10.0", features = ["const_generics"] }
 num-traits = "0.2.15"
 walkdir = "2.3.2"
+if_chain = "1.0.2"
+either = "1.8.1"
 
 [dev-dependencies]
 assert_matches = "1.5.0"

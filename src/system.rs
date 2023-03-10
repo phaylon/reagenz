@@ -167,6 +167,10 @@ where
         self.symbols.get(value).map(|(index, _)| *index)
     }
 
+    pub fn context<'a>(&'a self, state: &'a W::State) -> Context<'a, W> {
+        Context::new(state, self)
+    }
+
     pub fn register_effect<S, F, const N: usize>(
         &mut self,
         name: S,

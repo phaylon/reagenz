@@ -1,3 +1,4 @@
+use either::Either;
 use smallvec::SmallVec;
 
 use crate::World;
@@ -34,6 +35,12 @@ pub(super) enum NodeBranch<W: World> {
         arguments: Vec<NodeValue<W>>,
         mode: ContextMode,
     },
+    Query {
+        source: QuerySource,
+        arguments: Vec<NodeValue<W>>,
+        selection: QuerySelection,
+        branches: Vec<Self>,
+    },
 }
 
 impl<W> NodeBranch<W>
@@ -43,22 +50,10 @@ where
     pub(super) fn eval(&self, ctx: &Context<'_, W>, vars: &mut VarSpace<W>) -> Outcome<W> {
         match self {
             Self::Select { branches } => {
-                for branch in branches {
-                    let result = branch.eval(ctx, vars);
-                    if result.is_non_failure() {
-                        return result;
-                    }
-                }
-                Outcome::Failure
+                eval_selection(ctx, vars, branches)
             },
             Self::Sequence { branches } => {
-                for branch in branches {
-                    let result = branch.eval(ctx, vars);
-                    if result.is_non_success() {
-                        return result;
-                    }
-                }
-                Outcome::Success
+                eval_sequence(ctx, vars, branches)
             },
             Self::Ref { node, arguments, mode } => {
                 let arguments = reify_values(arguments, vars);
@@ -68,8 +63,102 @@ where
                     ctx.to_inactive().run_raw(*node, &arguments)
                 }
             },
+            Self::Query { source, arguments, selection, branches } => {
+                let arguments = reify_values(arguments, vars);
+                let iter = match source {
+                    QuerySource::Getter(index) => {
+                        Either::Left(ctx.get_raw(*index, &arguments).into_iter())
+                    },
+                    QuerySource::Query(index) => {
+                        Either::Right(ctx.query_raw(*index, &arguments))
+                    },
+                };
+                let vars_len = vars.len();
+                let mut vars = scopeguard::guard(vars, |vars| {
+                    vars.truncate(vars_len);
+                });
+                match selection {
+                    QuerySelection::Any => 'selection: {
+                        for item in iter {
+                            vars.push(item);
+                            let result = eval_sequence(ctx, &mut vars, branches);
+                            if result.is_non_failure() {
+                                break 'selection result;
+                            }
+                            vars.pop();
+                        }
+                        Outcome::Failure
+                    },
+                    QuerySelection::All => 'selection: {
+                        for item in iter {
+                            vars.push(item);
+                            let result = eval_sequence(ctx, &mut vars, branches);
+                            if result.is_non_success() {
+                                break 'selection result;
+                            }
+                            vars.pop();
+                        }
+                        Outcome::Success
+                    },
+                    QuerySelection::First => {
+                        let mut iter = iter;
+                        if let Some(item) = iter.next() {
+                            vars.push(item);
+                            let result = eval_sequence(ctx, &mut vars, branches);
+                            vars.pop();
+                            result
+                        } else {
+                            Outcome::Failure
+                        }
+                    },
+                    QuerySelection::Last => {
+                        if let Some(item) = iter.last() {
+                            vars.push(item);
+                            let result = eval_sequence(ctx, &mut vars, branches);
+                            vars.pop();
+                            result
+                        } else {
+                            Outcome::Failure
+                        }
+                    },
+                }
+            },
         }
     }
+}
+
+fn eval_selection<W>(
+    ctx: &Context<'_, W>,
+    vars: &mut VarSpace<W>,
+    branches: &[NodeBranch<W>],
+) -> Outcome<W>
+where
+    W: World,
+{
+    for branch in branches {
+        let result = branch.eval(ctx, vars);
+        if result.is_non_failure() {
+            return result;
+        }
+    }
+    Outcome::Failure
+}
+
+fn eval_sequence<W>(
+    ctx: &Context<'_, W>,
+    vars: &mut VarSpace<W>,
+    branches: &[NodeBranch<W>],
+) -> Outcome<W>
+where
+    W: World,
+{
+    for branch in branches {
+        let result = branch.eval(ctx, vars);
+        if result.is_non_success() {
+            return result;
+        }
+    }
+    Outcome::Success
 }
 
 fn reify_values<W>(values: &[NodeValue<W>], vars: &[Value<W>]) -> SmallVec<[Value<W>; 8]>
@@ -85,4 +174,28 @@ where
 pub(super) enum NodeValue<W: World> {
     Value(Value<W>),
     Variable(usize),
+}
+
+pub(super) enum QuerySource {
+    Getter(usize),
+    Query(usize),
+}
+
+pub(super) enum QuerySelection {
+    Any,
+    All,
+    First,
+    Last,
+}
+
+impl QuerySelection {
+    pub(super) fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "any" => Some(Self::Any),
+            "all" => Some(Self::All),
+            "first" => Some(Self::First),
+            "last" => Some(Self::Last),
+            _ => None,
+        }
+    }
 }

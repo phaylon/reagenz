@@ -1,4 +1,5 @@
 
+use if_chain::if_chain;
 use ramble::{Node, Item};
 use smol_str::SmolStr;
 
@@ -8,8 +9,9 @@ use crate::value::{Value};
 
 use super::parse::{
     match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref,
+    match_directive,
 };
-use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace};
+use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace, QuerySelection, QuerySource};
 use super::{Declaration, CompileError, CompileErrorKind};
 use super::kw;
 
@@ -158,6 +160,8 @@ where
     } else if match_group_directive(node, kw::SELECT)? {
         let branches = compile_node_branches(curr, env, &node.nodes)?;
         Ok(NodeBranch::Select { branches })
+    } else if let Some((signature, arguments)) = match_directive(node, kw::QUERY)? {
+        compile_query(curr, env, node, signature, arguments)
     } else if let Some((name, mode, arguments)) = match_node_ref(&node.items) {
         let arguments = compile_values(env, node, arguments)?;
         ensure_leaf_node(node)?;
@@ -166,6 +170,44 @@ where
         Ok(NodeBranch::Ref { node, arguments, mode })
     } else {
         Err(CompileErrorKind::Unrecognized.at(node))
+    }
+}
+
+fn compile_query<W>(
+    curr: &Current<'_, W>,
+    env: &mut Env,
+    node: &Node,
+    signature: &[Item],
+    items: &[Item],
+) -> Result<NodeBranch<W>, CompileError>
+where
+    W: World,
+{
+    if_chain! {
+        if signature.len() == 2;
+        if let Some(selection) = signature[0].word_str().and_then(QuerySelection::from_str);
+        if let Some(_) = match_variable(&signature[1]);
+        if let Some((name, arguments)) = match_raw_ref(items);
+        let arguments = compile_values(env, node, arguments)?;
+        let accepted = &[SymbolKind::Query, SymbolKind::Getter];
+        let index = resolve_symbol(curr, node, name, accepted, arguments.len())?;
+        then {
+            let branches = env.with(std::slice::from_ref(&signature[1]), node, |env| {
+                compile_node_branches(curr, env, &node.nodes)
+            })?;
+            Ok(NodeBranch::Query {
+                source: match curr.system.symbol(name.word_str().unwrap()).unwrap().kind {
+                    SymbolKind::Query => QuerySource::Query(index),
+                    SymbolKind::Getter => QuerySource::Getter(index),
+                    _ => unreachable!(),
+                },
+                arguments,
+                selection,
+                branches,
+            })
+        } else {
+            Err(CompileErrorKind::InvalidDirectiveSyntax(kw::QUERY).at(node))
+        }
     }
 }
 
