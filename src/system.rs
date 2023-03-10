@@ -12,11 +12,13 @@ use crate::value::{Value, ValueIter, StrExt};
 
 
 type SymbolMap = HashMap<SmolStr, (usize, SymbolInfo)>;
+type VariableMap = HashMap<SmolStr, usize>;
 
 pub(crate) type NodeHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Outcome<W>;
 pub(crate) type EffectHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<<W as World>::Effect>;
 pub(crate) type QueryHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Box<ValueIter<W>>;
 pub(crate) type GetterHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<Value<W>>;
+pub(crate) type GlobalHook<W> = dyn Fn(&Context<'_, W>) -> Value<W>;
 
 #[derive(Derivative)]
 #[derivative(
@@ -89,10 +91,12 @@ pub struct Action<W: World> {
 
 pub struct System<W: World> {
     symbols: SymbolMap,
+    global_variables: VariableMap,
     nodes: Vec<Box<NodeHook<W>>>,
     effects: Vec<Box<EffectHook<W>>>,
     queries: Vec<Box<QueryHook<W>>>,
     getters: Vec<Box<GetterHook<W>>>,
+    globals: Vec<Box<GlobalHook<W>>>,
 }
 
 impl<W> System<W>
@@ -102,11 +106,17 @@ where
     pub fn new() -> Self {
         Self {
             symbols: SymbolMap::new(),
+            global_variables: VariableMap::new(),
             nodes: Vec::new(),
             effects: Vec::new(),
             queries: Vec::new(),
             getters: Vec::new(),
+            globals: Vec::new(),
         }
+    }
+
+    pub fn context<'a>(&'a self, state: &'a W::State) -> Context<'a, W> {
+        Context::new(state, self)
     }
 
     pub fn load_from_str(self, content: &str) -> Result<Self, LoadError> {
@@ -167,8 +177,30 @@ where
         self.symbols.get(value).map(|(index, _)| *index)
     }
 
-    pub fn context<'a>(&'a self, state: &'a W::State) -> Context<'a, W> {
-        Context::new(state, self)
+    pub fn globals(&self) -> impl Iterator<Item = &SmolStr> + '_ {
+        self.global_variables.keys()
+    }
+
+    pub(crate) fn global_index(&self, value: &str) -> Option<usize> {
+        self.global_variables.get(value).copied()
+    }
+
+    pub fn register_global<S, F>(&mut self, name: S, body: F) -> Result<(), SystemGlobalError>
+    where
+        S: Into<SmolStr>,
+        F: Fn(&Context<'_, W>) -> Value<W> + 'static,
+    {
+        let name = name.into();
+        if self.global_variables.contains_key(&name) {
+            return Err(SystemGlobalError::Conflict);
+        }
+        if !name.is_variable() {
+            return Err(SystemGlobalError::Invalid);
+        }
+        let index = self.globals.len();
+        self.globals.push(Box::new(body));
+        self.global_variables.insert(name, index);
+        Ok(())
     }
 
     pub fn register_effect<S, F, const N: usize>(
@@ -389,6 +421,10 @@ where
         self.system.effects[index](self, arguments)
     }
 
+    pub(crate) fn global_raw(&self, index: usize) -> Value<W> {
+        self.system.globals[index](self)
+    }
+
     fn resolve_symbol(
         &self,
         name: &str,
@@ -408,6 +444,11 @@ where
             }));
         }
         Ok((*index, info.kind))
+    }
+
+    pub fn global(&self, name: &str) -> Option<Value<W>> {
+        let index = self.system.global_variables.get(name)?;
+        Some(self.global_raw(*index))
     }
 
     pub fn effect(&self, name: &str, arguments: &[Value<W>]) -> Result<Option<W::Effect>, RunError> {
@@ -465,6 +506,12 @@ pub enum SystemSymbolError {
         previous: SymbolInfo,
         current: SymbolInfo,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SystemGlobalError {
+    Invalid,
+    Conflict,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

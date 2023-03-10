@@ -44,7 +44,7 @@ where
     W: World,
 {
     let arity = parameters.len();
-    let mut env = Env::default();
+    let mut env = Env::new(curr.system);
 
     let (required, effects) = env.with(parameters, curr.top, |env| {
         let mut required = Vec::new();
@@ -94,7 +94,7 @@ where
     W: World,
 {
     let arity = parameters.len();
-    let mut env = Env::default();
+    let mut env = Env::new(curr.system);
 
     let logic = env.with(parameters, curr.top, |env| {
         let branches = compile_node_branches(curr, env, &curr.top.nodes)?;
@@ -114,7 +114,7 @@ where
 
 fn compile_effect<W>(
     curr: &Current<'_, W>,
-    env: &mut Env,
+    env: &mut Env<'_, W>,
     node: &Node,
 ) -> Result<EffectRef<W>, CompileError>
 where
@@ -133,7 +133,7 @@ where
 
 fn compile_effects<'a, W>(
     curr: &Current<'_, W>,
-    env: &mut Env,
+    env: &mut Env<'_, W>,
     nodes: impl IntoIterator<Item = &'a Node>,
 ) -> Result<Vec<EffectRef<W>>, CompileError>
 where
@@ -148,7 +148,7 @@ where
 
 fn compile_node_branch<W>(
     curr: &Current<'_, W>,
-    env: &mut Env,
+    env: &mut Env<'_, W>,
     node: &Node,
 ) -> Result<NodeBranch<W>, CompileError>
 where
@@ -175,7 +175,7 @@ where
 
 fn compile_query<W>(
     curr: &Current<'_, W>,
-    env: &mut Env,
+    env: &mut Env<'_, W>,
     node: &Node,
     signature: &[Item],
     items: &[Item],
@@ -249,7 +249,7 @@ fn ensure_leaf_node(node: &Node) -> Result<(), CompileError> {
 
 fn compile_node_branches<'a, W>(
     curr: &Current<'_, W>,
-    env: &mut Env,
+    env: &mut Env<'_, W>,
     nodes: impl IntoIterator<Item = &'a Node>,
 ) -> Result<Vec<NodeBranch<W>>, CompileError>
 where
@@ -263,7 +263,7 @@ where
 }
 
 fn compile_values<'a, W>(
-    env: &mut Env,
+    env: &mut Env<'_, W>,
     node: &Node,
     items: impl IntoIterator<Item = &'a Item>,
 ) -> Result<Vec<NodeValue<W>>, CompileError>
@@ -273,7 +273,7 @@ where
     let mut values = Vec::new();
     for item in items {
         if let Some(var) = match_variable(item) {
-            values.push(NodeValue::Variable(env.find(var, item, node)?));
+            values.push(env.find(var, item, node)?);
         } else if let Some(sym) = match_symbol(item) {
             values.push(NodeValue::Value(Value::Symbol(sym.clone())));
         } else if let Some(num) = item.num() {
@@ -288,22 +288,37 @@ where
     Ok(values)
 }
 
-#[derive(Default)]
-struct Env {
+struct Env<'a, W: World> {
+    system: &'a System<W>,
     lexicals: Vec<SmolStr>,
     max_len: usize,
 }
 
-impl Env {
+impl<'a, W> Env<'a, W>
+where
+    W: World,
+{
+    fn new(system: &'a System<W>) -> Self {
+        Self {
+            lexicals: Vec::new(),
+            max_len: 0,
+            system,
+        }
+    }
+
     fn find(
         &self,
-        lexical: &SmolStr,
+        variable: &SmolStr,
         item: &Item,
         node: &Node,
-    ) -> Result<usize, CompileError> {
-        self.lexicals.iter().position(|l| l == lexical).ok_or_else(|| {
-            CompileErrorKind::UnboundVariable(lexical.clone(), item.inline_span).at(node)
-        })
+    ) -> Result<NodeValue<W>, CompileError> {
+        if let Some(index) = self.system.global_index(variable) {
+            Ok(NodeValue::Global(index))
+        } else if let Some(index) = self.lexicals.iter().position(|l| l == variable) {
+            Ok(NodeValue::Lexical(index))
+        } else {
+            Err(CompileErrorKind::UnboundVariable(variable.clone(), item.inline_span).at(node))
+        }
     }
 
     fn with<F, R>(
@@ -321,7 +336,7 @@ impl Env {
         });
         for item in items.iter().cloned() {
             let var = item.word().unwrap().clone();
-            if env.lexicals.contains(&var) {
+            if env.lexicals.contains(&var) || env.system.global_index(&var).is_some() {
                 return Err(CompileErrorKind::ShadowedVariable(var, item.inline_span).at(node));
             }
             env.lexicals.push(var);
