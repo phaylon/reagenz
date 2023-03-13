@@ -58,9 +58,18 @@ pub(super) fn match_group_directive<'a>(
         return Ok(false);
     };
     if !rest.is_empty() || !items.is_empty() {
-        return Err(CompileErrorKind::InvalidDirectiveSyntax(keyword).at(node));
+        return Err(CompileErrorKind::InvalidDirectiveSyntax(keyword.into()).at(node));
     }
     Ok(true)
+}
+
+pub(super) fn match_free_directive<'a>(
+    node: &'a Node,
+) -> Option<(&'a Item, &'a [Item], &'a [Item])> {
+    let (first, _) = node.items.split_first()?;
+    let name = first.word_str()?;
+    let (signature, arguments) = match_directive(node, name).ok()??;
+    Some((first, signature, arguments))
 }
 
 pub(super) fn match_directive<'a>(

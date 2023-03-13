@@ -11,12 +11,15 @@ use crate::system::{
 use self::parse::{require_ref_declaration, match_directive};
 use self::compile::compile_declaration;
 
+pub use self::runtime::Branch;
+
 
 mod parse;
 mod compile;
 mod runtime;
-mod kw;
-mod mark;
+
+pub(crate) mod kw;
+pub(crate) mod mark;
 
 pub(crate) fn load_str<W>(
     content: &str,
@@ -33,8 +36,9 @@ where
         let decl = Declaration::extract(node)?;
         let source = source.clone().with_line(node.location.line_index + 1);
         let (name, info) = decl.symbol_info(source);
-        system.register_node_raw(name.clone(), info, Box::new(|_, _| panic!("node placeholder")))
-            .map_err(|error| CompileErrorKind::SystemSymbol(error).at(node))?;
+        system.register_node_raw(name.clone(), info, Box::new(|_, _| {
+            panic!("loaded node was declared but not compiled in")
+        })).map_err(|error| CompileErrorKind::SystemSymbol(error).at(node))?;
         node_decls.push((name, decl));
     }
 
@@ -71,7 +75,7 @@ pub enum CompileErrorKind {
     InvalidDeclaration,
     InvalidNodeDeclaration,
     SystemSymbol(SystemSymbolError),
-    InvalidDirectiveSyntax(&'static str),
+    InvalidDirectiveSyntax(SmolStr),
     InvalidRefSyntax,
     InvalidEffectRefSyntax,
     ShadowedVariable(SmolStr, Span),
@@ -81,6 +85,7 @@ pub enum CompileErrorKind {
     UnknownSymbol(SmolStr, Span),
     InvalidSymbolKind(SmolStr, Span, SymbolKind),
     InvalidSymbolArity(SmolStr, ArityMismatch),
+    UnknownDirective(SmolStr),
 }
 
 impl CompileErrorKind {

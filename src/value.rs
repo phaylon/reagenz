@@ -1,4 +1,6 @@
 use derivative::Derivative;
+use ramble::{Item, Num, ItemKind};
+use smallvec::SmallVec;
 use smol_str::SmolStr;
 use num_traits::NumCast;
 
@@ -7,6 +9,8 @@ use crate::loader::is_reserved_char;
 
 
 pub type ValueIter<W> = dyn Iterator<Item = Value<W>>;
+
+pub type Args<T> = SmallVec<[T; 16]>;
 
 #[derive(Derivative)]
 #[derivative(
@@ -53,6 +57,15 @@ impl<W> Value<W>
 where
     W: World,
 {
+    pub(crate) fn try_from_item(item: &Item) -> Option<Self> {
+        match item.kind {
+            ItemKind::Word(ref word) => Some(Self::Symbol(word.clone())),
+            ItemKind::Num(Num::Int(i)) => Some(Self::Int(i)),
+            ItemKind::Num(Num::Float(f)) => Some(Self::Float(f)),
+            ItemKind::Punctuation(_) | ItemKind::Group(_, _) => None,
+        }
+    }
+
     fn_access!(Ext, &W::Value, is_ext, ext, |ext| ext);
     fn_access!(Symbol, &SmolStr, is_symbol, symbol, |sym| sym);
     fn_access!(Int, i64, is_int, int, |i| *i);

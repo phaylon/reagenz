@@ -190,3 +190,42 @@ fn query_nodes_last() {
         Outcome::Failure
     );
 }
+
+#[test]
+fn dispatchers() {
+    let mut sys = System::<Test>::default();
+    sys.register_effect("emit", |_ctx, [v]| v.int()).unwrap();
+    sys.register_node("<=", |_ctx, [a, b]| {
+        (a.int() <= b.int()).into()
+    }).unwrap();
+    sys.register_dispatch("select-reverse", |_sys, signature| {
+        assert_eq!(signature.len(), 1);
+        assert_eq!(signature[0].int().unwrap(), 23);
+        Some(Box::new(|ctx, arguments, branches| {
+            assert_eq!(arguments.len(), 1);
+            for branch in branches.into_iter().rev() {
+                let result = branch.eval(ctx);
+                if result.is_non_failure() {
+                    return result;
+                }
+            }
+            Outcome::from_effect(100 + arguments[0].int().unwrap())
+        }))
+    }).unwrap();
+    let sys = sys.load_from_str(&realign("
+        action: check $case $value
+          required:
+            <=? $case $value
+          effects:
+            emit $case
+        node: test $value
+          select-reverse 23: $value
+            check! 1 $value
+            check! 2 $value
+            check! 3 $value
+    ")).unwrap();
+    assert_eq!(sys.context(&0).run("test", &[1.into()]).unwrap(), Outcome::from_effect(1));
+    assert_eq!(sys.context(&0).run("test", &[2.into()]).unwrap(), Outcome::from_effect(2));
+    assert_eq!(sys.context(&0).run("test", &[3.into()]).unwrap(), Outcome::from_effect(3));
+    assert_eq!(sys.context(&0).run("test", &[0.into()]).unwrap(), Outcome::from_effect(100));
+}

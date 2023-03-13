@@ -7,12 +7,26 @@ use smol_str::SmolStr;
 use walkdir::WalkDir;
 
 use crate::World;
-use crate::loader::{LoadError, load_str};
-use crate::value::{Value, ValueIter, StrExt};
+use crate::loader::kw::DIRECTIVES;
+use crate::loader::{LoadError, load_str, Branch};
+use crate::value::{Value, ValueIter, StrExt, Args};
 
 
 type SymbolMap = HashMap<SmolStr, (usize, SymbolInfo)>;
 type VariableMap = HashMap<SmolStr, usize>;
+
+pub type Dispatcher<W> = dyn Fn(
+    &Context<'_, W>,
+    Args<Value<W>>,
+    Args<Branch<'_, W>>,
+) -> Outcome<W>;
+
+pub(crate) type DispatchBuilder<W> = dyn Fn(
+    &System<W>,
+    Vec<Value<W>>,
+) -> Option<Box<Dispatcher<W>>>;
+
+pub(crate) type DispatchBuilderMap<W> = HashMap<SmolStr, Box<DispatchBuilder<W>>>;
 
 pub(crate) type NodeHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Outcome<W>;
 pub(crate) type EffectHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<<W as World>::Effect>;
@@ -36,6 +50,10 @@ impl<W> Outcome<W>
 where
     W: World,
 {
+    pub fn from_effect(effect: W::Effect) -> Self {
+        Self::from(Vec::from([effect]))
+    }
+
     pub fn is_success(&self) -> bool {
         matches!(self, Self::Success)
     }
@@ -65,12 +83,30 @@ where
     }
 }
 
+impl<W> From<Vec<W::Effect>> for Outcome<W>
+where
+    W: World,
+{
+    fn from(effects: Vec<W::Effect>) -> Self {
+        Outcome::Action(Action { effects })
+    }
+}
+
+impl<W> From<Action<W>> for Outcome<W>
+where
+    W: World,
+{
+    fn from(action: Action<W>) -> Self {
+        Outcome::Action(action)
+    }
+}
+
 impl<W> From<bool> for Outcome<W>
 where
     W: World,
 {
-    fn from(value: bool) -> Self {
-        if value {
+    fn from(is_true: bool) -> Self {
+        if is_true {
             Self::Success
         } else {
             Self::Failure
@@ -92,6 +128,7 @@ pub struct Action<W: World> {
 pub struct System<W: World> {
     symbols: SymbolMap,
     global_variables: VariableMap,
+    dispatch_builders: DispatchBuilderMap<W>,
     nodes: Vec<Box<NodeHook<W>>>,
     effects: Vec<Box<EffectHook<W>>>,
     queries: Vec<Box<QueryHook<W>>>,
@@ -107,6 +144,7 @@ where
         Self {
             symbols: SymbolMap::new(),
             global_variables: VariableMap::new(),
+            dispatch_builders: DispatchBuilderMap::new(),
             nodes: Vec::new(),
             effects: Vec::new(),
             queries: Vec::new(),
@@ -279,6 +317,45 @@ where
         )
     }
 
+    pub(crate) fn dispatcher(
+        &self,
+        name: &str,
+        signature: Vec<Value<W>>,
+    ) -> Result<Box<Dispatcher<W>>, DispatchBuilderError> {
+        if let Some(builder) = self.dispatch_builders.get(name) {
+            if let Some(dispatcher) = builder(self, signature) {
+                Ok(dispatcher)
+            } else {
+                Err(DispatchBuilderError::Failed)
+            }
+        } else {
+            Err(DispatchBuilderError::Unknown)
+        }
+    }
+
+    pub fn register_dispatch<S, F>(
+        &mut self,
+        name: S,
+        body: F,
+    ) -> Result<(), SystemDispatcherError>
+    where
+        S: Into<SmolStr>,
+        F: Fn(&System<W>, Vec<Value<W>>) -> Option<Box<Dispatcher<W>>> + 'static,
+    {
+        let name = name.into();
+        if !name.is_symbol() {
+            return Err(SystemDispatcherError::Invalid);
+        }
+        if DIRECTIVES.contains(&name.as_str()) {
+            return Err(SystemDispatcherError::BuiltinConflict);
+        }
+        if self.dispatch_builders.contains_key(&name) {
+            return Err(SystemDispatcherError::DispatcherConflict);
+        }
+        self.dispatch_builders.insert(name, Box::new(body));
+        Ok(())
+    }
+
     pub(crate) fn register_node_raw(
         &mut self,
         name: SmolStr,
@@ -301,6 +378,11 @@ where
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub(crate) enum DispatchBuilderError {
+    Unknown,
+    Failed,
 }
 
 #[derive(Debug, Clone)]
@@ -506,6 +588,13 @@ pub enum SystemSymbolError {
         previous: SymbolInfo,
         current: SymbolInfo,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SystemDispatcherError {
+    Invalid,
+    BuiltinConflict,
+    DispatcherConflict,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

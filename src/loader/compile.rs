@@ -4,12 +4,14 @@ use ramble::{Node, Item};
 use smol_str::SmolStr;
 
 use crate::World;
-use crate::system::{System, NodeHook, SymbolKind, ArityMismatch, Outcome, Action};
+use crate::system::{
+    System, NodeHook, SymbolKind, ArityMismatch, Outcome, Action, DispatchBuilderError,
+};
 use crate::value::{Value};
 
 use super::parse::{
     match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref,
-    match_directive,
+    match_directive, match_free_directive,
 };
 use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace, QuerySelection, QuerySource};
 use super::{Declaration, CompileError, CompileErrorKind};
@@ -162,6 +164,19 @@ where
         Ok(NodeBranch::Select { branches })
     } else if let Some((signature, arguments)) = match_directive(node, kw::QUERY)? {
         compile_query(curr, env, node, signature, arguments)
+    } else if let Some((name, signature, arguments)) = match_free_directive(node) {
+        let name = name.word().unwrap();
+        let branches = compile_node_branches(curr, env, &node.nodes)?;
+        let signature = compile_constant_values(signature)
+            .ok_or_else(|| CompileErrorKind::InvalidDirectiveSyntax(name.as_str().into()).at(node))?;
+        let callback = curr.system.dispatcher(name, signature).map_err(|error| match error {
+            DispatchBuilderError::Unknown =>
+                CompileErrorKind::UnknownDirective(name.clone()).at(node),
+            DispatchBuilderError::Failed =>
+                CompileErrorKind::InvalidDirectiveSyntax(name.clone()).at(node),
+        })?;
+        let arguments = compile_values(env, node, arguments)?;
+        Ok(NodeBranch::Dispatcher { callback, arguments, branches })
     } else if let Some((name, mode, arguments)) = match_node_ref(&node.items) {
         let arguments = compile_values(env, node, arguments)?;
         ensure_leaf_node(node)?;
@@ -206,7 +221,7 @@ where
                 branches,
             })
         } else {
-            Err(CompileErrorKind::InvalidDirectiveSyntax(kw::QUERY).at(node))
+            Err(CompileErrorKind::InvalidDirectiveSyntax(kw::QUERY.into()).at(node))
         }
     }
 }
@@ -260,6 +275,19 @@ where
         compiled.push(compile_node_branch(curr, env, node)?);
     }
     Ok(compiled)
+}
+
+fn compile_constant_values<'a, W>(
+    items: impl IntoIterator<Item = &'a Item>,
+) -> Option<Vec<Value<W>>>
+where
+    W: World,
+{
+    let mut values = Vec::new();
+    for item in items {
+        values.push(Value::try_from_item(item)?);
+    }
+    Some(values)
 }
 
 fn compile_values<'a, W>(

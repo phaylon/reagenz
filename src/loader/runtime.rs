@@ -2,8 +2,8 @@ use either::Either;
 use smallvec::SmallVec;
 
 use crate::World;
-use crate::system::{Context, Outcome, ContextMode};
-use crate::value::Value;
+use crate::system::{Context, Outcome, ContextMode, Dispatcher};
+use crate::value::{Value, Args};
 
 
 pub(super) type VarSpace<W> = SmallVec<[Value<W>; 16]>;
@@ -41,6 +41,11 @@ pub(super) enum NodeBranch<W: World> {
         selection: QuerySelection,
         branches: Vec<Self>,
     },
+    Dispatcher {
+        callback: Box<Dispatcher<W>>,
+        arguments: Vec<NodeValue<W>>,
+        branches: Vec<Self>,
+    },
 }
 
 impl<W> NodeBranch<W>
@@ -62,6 +67,11 @@ where
                 } else {
                     ctx.to_inactive().run_raw(*node, &arguments)
                 }
+            },
+            Self::Dispatcher { callback, arguments, branches } => {
+                let arguments = reify_values(ctx, arguments, vars);
+                let branches = branches.iter().map(|branch| Branch { vars, branch }).collect();
+                callback(ctx, arguments, branches)
             },
             Self::Query { source, arguments, selection, branches } => {
                 let arguments = reify_values(ctx, arguments, vars);
@@ -127,6 +137,21 @@ where
     }
 }
 
+pub struct Branch<'a, W: World> {
+    vars: &'a VarSpace<W>,
+    branch: &'a NodeBranch<W>,
+}
+
+impl<'a, W> Branch<'a, W>
+where
+    W: World,
+{
+    pub fn eval(&self, ctx: &Context<'_, W>) -> Outcome<W> {
+        let mut vars = self.vars.clone();
+        self.branch.eval(ctx, &mut vars)
+    }
+}
+
 fn eval_selection<W>(
     ctx: &Context<'_, W>,
     vars: &mut VarSpace<W>,
@@ -165,7 +190,7 @@ fn reify_values<W>(
     ctx: &Context<'_, W>,
     values: &[NodeValue<W>],
     vars: &[Value<W>],
-) -> SmallVec<[Value<W>; 8]>
+) -> Args<Value<W>>
 where
     W: World,
 {
