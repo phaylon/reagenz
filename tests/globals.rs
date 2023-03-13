@@ -1,23 +1,14 @@
 use assert_matches::assert_matches;
-use reagenz::World;
-use reagenz::system::{System, SystemGlobalError};
+use reagenz::system::{SystemGlobalError};
 use common::realign;
 use reagenz::value::Value;
 
 
 mod common;
 
-struct Test;
-
-impl World for Test {
-    type State = i64;
-    type Effect = i64;
-    type Value = ();
-}
-
 #[test]
 fn globals() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_global("$X", |ctx| (*ctx.state()).into()).unwrap();
     sys.register_effect("emit", |_, [v]| v.int()).unwrap();
     let sys = sys.load_from_str(&realign("

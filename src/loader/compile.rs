@@ -11,7 +11,7 @@ use crate::value::{Value};
 
 use super::parse::{
     match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref,
-    match_directive, match_free_directive,
+    match_directive, match_free_directive, match_list,
 };
 use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace, QuerySelection, QuerySource};
 use super::{Declaration, CompileError, CompileErrorKind};
@@ -309,6 +309,8 @@ where
                 ramble::Num::Int(i) => Value::Int(i),
                 ramble::Num::Float(f) => Value::Float(f),
             }));
+        } else if let Some(items) = match_list(item) {
+            values.push(NodeValue::List(compile_values(env, node, items)?));
         } else {
             return Err(CompileErrorKind::InvalidValue(item.inline_span).at(node));
         }

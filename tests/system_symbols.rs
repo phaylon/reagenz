@@ -1,19 +1,12 @@
 use assert_matches::assert_matches;
-use reagenz::World;
-use reagenz::system::{System, SymbolKind, SystemSymbolError, SymbolInfo};
+use reagenz::system::{SymbolKind, SystemSymbolError, SymbolInfo};
 
 
-struct Test;
-
-impl World for Test {
-    type State = ();
-    type Effect = ();
-    type Value = ();
-}
+mod common;
 
 #[test]
 fn node_symbols() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!((), (), ());
     sys.register_node("test", |_ctx, [_, _]| panic!("test node")).unwrap();
     let info = sys.symbol("test").unwrap();
     assert_eq!(info.arity, 2);
@@ -22,7 +15,7 @@ fn node_symbols() {
 
 #[test]
 fn effect_symbols() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!((), (), ());
     sys.register_effect("test", |_ctx, [_, _]| panic!("test effect")).unwrap();
     let info = sys.symbol("test").unwrap();
     assert_eq!(info.arity, 2);
@@ -31,7 +24,7 @@ fn effect_symbols() {
 
 #[test]
 fn query_symbols() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!((), (), ());
     sys.register_query("test", |_ctx, [_, _]| panic!("test query")).unwrap();
     let info = sys.symbol("test").unwrap();
     assert_eq!(info.arity, 2);
@@ -40,7 +33,7 @@ fn query_symbols() {
 
 #[test]
 fn getter_symbols() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!((), (), ());
     sys.register_getter("test", |_ctx, [_, _]| panic!("test getter")).unwrap();
     let info = sys.symbol("test").unwrap();
     assert_eq!(info.arity, 2);
@@ -49,7 +42,7 @@ fn getter_symbols() {
 
 #[test]
 fn multiple() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!((), (), ());
     sys.register_node("a", |_ctx, [_, _]| panic!("test node a")).unwrap();
     sys.register_node("b", |_ctx, [_, _]| panic!("test node b")).unwrap();
     sys.register_node("c", |_ctx, [_, _]| panic!("test node c")).unwrap();

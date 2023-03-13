@@ -1,25 +1,16 @@
 use assert_matches::assert_matches;
-use reagenz::World;
-use reagenz::system::{System, Outcome};
+use reagenz::system::{Outcome};
 use common::realign;
 
 
 mod common;
 
-struct Test;
-
 #[derive(Debug)]
 enum Effect { A(i64), B(i64) }
 
-impl World for Test {
-    type State = ();
-    type Effect = Effect;
-    type Value = ();
-}
-
 #[test]
 fn action_nodes() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!((), Effect, ());
     sys.register_effect("emit-a", |_ctx, [v]| Some(Effect::A(v.int().unwrap()))).unwrap();
     sys.register_effect("emit-b", |_ctx, [v]| Some(Effect::B(v.int().unwrap()))).unwrap();
     sys.register_node("lt", |_ctx, [a, b]| (a.int().unwrap() < b.int().unwrap()).into()).unwrap();

@@ -1,23 +1,14 @@
 use assert_matches::assert_matches;
 use common::realign;
-use reagenz::World;
-use reagenz::system::{System, Outcome, Action};
+use reagenz::system::{Outcome, Action};
 use reagenz::value::Value;
 
 
 mod common;
 
-struct Test;
-
-impl World for Test {
-    type State = i64;
-    type Effect = i64;
-    type Value = ();
-}
-
 #[test]
 fn sequence_nodes() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_node("is-state-value", |ctx, [val]| {
         if val.int().unwrap() == *ctx.state() { Outcome::Success }
         else { Outcome::Failure }
@@ -48,7 +39,7 @@ fn sequence_nodes() {
 
 #[test]
 fn selection_nodes() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_node("emit", |_ctx, [val]| {
         Outcome::Action(Action {
             effects: Vec::from([val.int().unwrap()]),
@@ -85,7 +76,7 @@ fn selection_nodes() {
 
 #[test]
 fn query_nodes_any() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_node("=", |_ctx, [a, b]| {
         (a == b).into()
     }).unwrap();
@@ -109,7 +100,7 @@ fn query_nodes_any() {
 
 #[test]
 fn query_nodes_all() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_node("<", |_ctx, [a, b]| {
         (a.int() < b.int()).into()
     }).unwrap();
@@ -137,7 +128,7 @@ fn query_nodes_all() {
 
 #[test]
 fn query_nodes_first() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_node("=", |_ctx, [a, b]| {
         (a.int() == b.int()).into()
     }).unwrap();
@@ -165,7 +156,7 @@ fn query_nodes_first() {
 
 #[test]
 fn query_nodes_last() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_node("=", |_ctx, [a, b]| {
         (a.int() == b.int()).into()
     }).unwrap();
@@ -193,7 +184,7 @@ fn query_nodes_last() {
 
 #[test]
 fn dispatchers() {
-    let mut sys = System::<Test>::default();
+    let mut sys = make_system!(i64, i64, ());
     sys.register_effect("emit", |_ctx, [v]| v.int()).unwrap();
     sys.register_node("<=", |_ctx, [a, b]| {
         (a.int() <= b.int()).into()

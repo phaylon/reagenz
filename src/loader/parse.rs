@@ -1,5 +1,5 @@
 
-use ramble::{Item, Node};
+use ramble::{Item, Node, GroupKind};
 use smol_str::SmolStr;
 
 use crate::system::ContextMode;
@@ -48,6 +48,14 @@ pub(super) fn match_symbol(item: &Item) -> Option<&SmolStr> {
 pub(super) fn match_variable(item: &Item) -> Option<&SmolStr> {
     let word = item.word()?;
     word.is_variable().then_some(word)
+}
+
+pub(super) fn match_list(item: &Item) -> Option<&[Item]> {
+    if let Some((GroupKind::Brackets, items)) = item.group() {
+        Some(items)
+    } else {
+        None
+    }
 }
 
 pub(super) fn match_group_directive<'a>(

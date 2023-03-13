@@ -18,7 +18,7 @@ where
     W: World,
 {
     pub(super) fn eval(&self, ctx: &Context<'_, W>, vars: &mut VarSpace<W>) -> Option<W::Effect> {
-        let arguments = reify_values(ctx, &self.arguments, vars);
+        let arguments: Args<_> = reify_values(ctx, &self.arguments, vars);
         ctx.effect_raw(self.effect, &arguments)
     }
 }
@@ -61,7 +61,7 @@ where
                 eval_sequence(ctx, vars, branches)
             },
             Self::Ref { node, arguments, mode } => {
-                let arguments = reify_values(ctx, arguments, vars);
+                let arguments: Args<_> = reify_values(ctx, arguments, vars);
                 if mode.is_active() {
                     ctx.run_raw(*node, &arguments)
                 } else {
@@ -74,7 +74,7 @@ where
                 callback(ctx, arguments, branches)
             },
             Self::Query { source, arguments, selection, branches } => {
-                let arguments = reify_values(ctx, arguments, vars);
+                let arguments: Args<_> = reify_values(ctx, arguments, vars);
                 let iter = match source {
                     QuerySource::Getter(index) => {
                         Either::Left(ctx.get_raw(*index, &arguments).into_iter())
@@ -186,18 +186,20 @@ where
     Outcome::Success
 }
 
-fn reify_values<W>(
+fn reify_values<W, C>(
     ctx: &Context<'_, W>,
     values: &[NodeValue<W>],
     vars: &[Value<W>],
-) -> Args<Value<W>>
+) -> C
 where
     W: World,
+    C: FromIterator<Value<W>>,
 {
     values.iter().map(|value| match value {
         NodeValue::Value(value) => value.clone(),
         NodeValue::Lexical(index) => vars[*index].clone(),
         NodeValue::Global(index) => ctx.global_raw(*index),
+        NodeValue::List(values) => Value::List(reify_values(ctx, values, vars)),
     }).collect()
 }
 
@@ -205,6 +207,7 @@ pub(super) enum NodeValue<W: World> {
     Value(Value<W>),
     Lexical(usize),
     Global(usize),
+    List(Vec<Self>),
 }
 
 pub(super) enum QuerySource {

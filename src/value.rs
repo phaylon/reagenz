@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use derivative::Derivative;
 use ramble::{Item, Num, ItemKind};
 use smallvec::SmallVec;
@@ -12,6 +14,8 @@ pub type ValueIter<W> = dyn Iterator<Item = Value<W>>;
 
 pub type Args<T> = SmallVec<[T; 16]>;
 
+pub type List<T> = Arc<[T]>;
+
 #[derive(Derivative)]
 #[derivative(
     Clone(bound=""),
@@ -23,6 +27,7 @@ pub enum Value<W: World> {
     Symbol(SmolStr),
     Int(i64),
     Float(f64),
+    List(List<Self>),
 }
 
 macro_rules! fn_access {
@@ -75,6 +80,16 @@ where
     fn_convert_num!(to_f64, f64);
 }
 
+impl<W, V> FromIterator<V> for Value<W>
+where
+    W: World,
+    V: Into<Self>,
+{
+    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+        Self::List(iter.into_iter().map(Into::into).collect())
+    }
+}
+
 macro_rules! impl_value_from {
     ($source:ty, |$value:ident| $create:expr) => {
         impl<W> From<$source> for Value<W> where W: World {
@@ -91,6 +106,26 @@ impl_value_from!(f64, |v| Self::Float(v));
 impl_value_from!(f32, |v| Self::Float(v.into()));
 impl_value_from!(SmolStr, |v| Self::Symbol(v));
 impl_value_from!(&SmolStr, |v| Self::Symbol(v.clone()));
+
+impl<W, T> From<Vec<T>> for Value<W>
+where
+    W: World,
+    T: Into<Self>,
+{
+    fn from(values: Vec<T>) -> Self {
+        values.into_iter().collect()
+    }
+}
+
+impl<W, T, const N: usize> From<[T; N]> for Value<W>
+where
+    W: World,
+    T: Into<Self>,
+{
+    fn from(values: [T; N]) -> Self {
+        values.into_iter().collect()
+    }
+}
 
 pub trait StrExt {
     fn as_str(&self) -> &str;
