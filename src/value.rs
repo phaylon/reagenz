@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use derivative::Derivative;
-use ramble::{Item, Num, ItemKind};
+use ramble::{Item, Num, ItemKind, GroupKind};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 use num_traits::NumCast;
@@ -67,6 +67,10 @@ where
             ItemKind::Word(ref word) => Some(Self::Symbol(word.clone())),
             ItemKind::Num(Num::Int(i)) => Some(Self::Int(i)),
             ItemKind::Num(Num::Float(f)) => Some(Self::Float(f)),
+            ItemKind::Group(GroupKind::Brackets, ref items) => items.iter()
+                .map(Self::try_from_item)
+                .collect::<Option<Arc<[_]>>>()
+                .map(Self::List),
             ItemKind::Punctuation(_) | ItemKind::Group(_, _) => None,
         }
     }
@@ -75,6 +79,7 @@ where
     fn_access!(Symbol, &SmolStr, is_symbol, symbol, |sym| sym);
     fn_access!(Int, i64, is_int, int, |i| *i);
     fn_access!(Float, f64, is_float, float, |f| *f);
+    fn_access!(List, &[Self], is_list, list, |values| values);
 
     fn_convert_num!(to_i64, i64);
     fn_convert_num!(to_f64, f64);

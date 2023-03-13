@@ -7,6 +7,7 @@ use smol_str::SmolStr;
 use walkdir::WalkDir;
 
 use crate::World;
+use crate::core::load_core_system;
 use crate::loader::kw::DIRECTIVES;
 use crate::loader::{LoadError, load_str, Branch};
 use crate::value::{Value, ValueIter, StrExt, Args};
@@ -151,6 +152,10 @@ where
             getters: Vec::new(),
             globals: Vec::new(),
         }
+    }
+
+    pub fn core() -> Self {
+        load_core_system(Self::new()).unwrap()
     }
 
     pub fn context<'a>(&'a self, state: &'a W::State) -> Context<'a, W> {
