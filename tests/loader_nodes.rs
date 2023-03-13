@@ -1,7 +1,7 @@
 use assert_matches::assert_matches;
 use common::realign;
 use reagenz::World;
-use reagenz::system::{System, Outcome, Action, Context};
+use reagenz::system::{System, Outcome, Action};
 use reagenz::value::Value;
 
 
@@ -29,19 +29,19 @@ fn sequence_nodes() {
     ")).unwrap();
 
     assert_matches!(
-        Context::new(&23, &sys).run("test", &[0.into(), 23.into()]).unwrap(),
+        sys.context(&23).run("test", &[0.into(), 23.into()]).unwrap(),
         Outcome::Failure
     );
     assert_matches!(
-        Context::new(&23, &sys).run("test", &[23.into(), 0.into()]).unwrap(),
+        sys.context(&23).run("test", &[23.into(), 0.into()]).unwrap(),
         Outcome::Failure
     );
     assert_matches!(
-        Context::new(&23, &sys).run("test", &[0.into(), 0.into()]).unwrap(),
+        sys.context(&23).run("test", &[0.into(), 0.into()]).unwrap(),
         Outcome::Failure
     );
     assert_matches!(
-        Context::new(&23, &sys).run("test", &[23.into(), 23.into()]).unwrap(),
+        sys.context(&23).run("test", &[23.into(), 23.into()]).unwrap(),
         Outcome::Success
     );
 }
@@ -70,15 +70,15 @@ fn selection_nodes() {
     ")).unwrap();
 
     assert_matches!(
-        Context::new(&23, &sys).run("test", &[23.into(), 42.into()]).unwrap().effects(),
+        sys.context(&23).run("test", &[23.into(), 42.into()]).unwrap().effects(),
         Some(&[1])
     );
     assert_matches!(
-        Context::new(&42, &sys).run("test", &[23.into(), 42.into()]).unwrap().effects(),
+        sys.context(&42).run("test", &[23.into(), 42.into()]).unwrap().effects(),
         Some(&[2])
     );
     assert_matches!(
-        Context::new(&0, &sys).run("test", &[23.into(), 42.into()]).unwrap(),
+        sys.context(&0).run("test", &[23.into(), 42.into()]).unwrap(),
         Outcome::Failure
     );
 }
@@ -224,8 +224,9 @@ fn dispatchers() {
             check! 2 $value
             check! 3 $value
     ")).unwrap();
-    assert_eq!(sys.context(&0).run("test", &[1.into()]).unwrap(), Outcome::from_effect(1));
-    assert_eq!(sys.context(&0).run("test", &[2.into()]).unwrap(), Outcome::from_effect(2));
-    assert_eq!(sys.context(&0).run("test", &[3.into()]).unwrap(), Outcome::from_effect(3));
-    assert_eq!(sys.context(&0).run("test", &[0.into()]).unwrap(), Outcome::from_effect(100));
+    let ctx = sys.context(&0);
+    assert_eq!(ctx.run("test", &[1.into()]).unwrap(), Outcome::from_effect(1));
+    assert_eq!(ctx.run("test", &[2.into()]).unwrap(), Outcome::from_effect(2));
+    assert_eq!(ctx.run("test", &[3.into()]).unwrap(), Outcome::from_effect(3));
+    assert_eq!(ctx.run("test", &[0.into()]).unwrap(), Outcome::from_effect(100));
 }

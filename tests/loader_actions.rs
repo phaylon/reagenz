@@ -1,6 +1,6 @@
 use assert_matches::assert_matches;
 use reagenz::World;
-use reagenz::system::{System, Context, Outcome};
+use reagenz::system::{System, Outcome};
 use common::realign;
 
 
@@ -31,7 +31,7 @@ fn action_nodes() {
             emit-a $a
             emit-b $b
     ")).unwrap();
-    let ctx = Context::new(&(), &sys);
+    let ctx = sys.context(&());
     assert_matches!(
         ctx.run("test", &[23.into(), 42.into()]).unwrap().effects().unwrap(),
         &[Effect::A(23), Effect::B(42)]

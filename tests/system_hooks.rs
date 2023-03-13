@@ -1,5 +1,5 @@
 use reagenz::World;
-use reagenz::system::{System, Context, Outcome};
+use reagenz::system::{System, Outcome};
 use reagenz::value::Value;
 
 
@@ -15,7 +15,7 @@ impl World for Test {
 fn effect_hooks() {
     let mut sys = System::<Test>::default();
     sys.register_effect("test", |ctx, [val]| Some(*ctx.state() + val.int().unwrap())).unwrap();
-    let ctx = Context::new(&23, &sys);
+    let ctx = sys.context(&23);
     assert_eq!(ctx.effect("test", &[42.into()]).unwrap(), Some(65));
 }
 
@@ -23,7 +23,7 @@ fn effect_hooks() {
 fn node_hooks() {
     let mut sys = System::<Test>::default();
     sys.register_node("test", |ctx, [val]| (*ctx.state() == val.int().unwrap()).into()).unwrap();
-    let ctx = Context::new(&23, &sys);
+    let ctx = sys.context(&23);
     assert_eq!(ctx.run("test", &[42.into()]).unwrap(), Outcome::Failure);
     assert_eq!(ctx.run("test", &[23.into()]).unwrap(), Outcome::Success);
 }
@@ -34,8 +34,8 @@ fn query_hooks() {
     sys.register_query("test", |ctx, [val]| {
         Box::new((*ctx.state()..val.int().unwrap()).map(Value::from))
     }).unwrap();
-    let ctx = Context::new(&3, &sys);
-    let values = ctx.query("test", &[6.into()]).unwrap()
+    let values = sys.context(&3)
+        .query("test", &[6.into()]).unwrap()
         .map(|v| v.int().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(&values, &[3, 4, 5]);
@@ -47,10 +47,9 @@ fn getter_hooks() {
     sys.register_getter("test", |ctx, [val]| {
         Some((*ctx.state() + val.int().unwrap()).into())
     }).unwrap();
-    let ctx = Context::new(&23, &sys);
-    let values = ctx.query("test", &[42.into()]).unwrap()
+    let values = sys.context(&23)
+        .query("test", &[42.into()]).unwrap()
         .map(|v| v.int().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(&values, &[65]);
 }
-
