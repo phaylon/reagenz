@@ -7,6 +7,7 @@ pub(super) const REQUIRED: &str = "required";
 pub(super) const EFFECTS: &str = "effects";
 pub(super) const QUERY: &str = "for";
 pub(super) const NONE: &str = "none";
+pub(super) const MATCH: &str = "match";
 
 pub(crate) const DIRECTIVES: &[&str] = &[
     ACTION,
@@ -17,4 +18,5 @@ pub(crate) const DIRECTIVES: &[&str] = &[
     EFFECTS,
     QUERY,
     NONE,
+    MATCH,
 ];

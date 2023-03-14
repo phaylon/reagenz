@@ -91,6 +91,47 @@ fn none_nodes() {
 }
 
 #[test]
+fn match_nodes() {
+    use Value::*;
+    let mut sys = make_system!((), i64, ());
+    sys.register_effect("emit", |_, [v]| v.int()).unwrap();
+    let sys = sys.load_from_str(&realign("
+        action: output $v
+          effects:
+            emit $v
+        node: test $value $lex
+          match $value: abc $v? $lex $v
+            output! $v
+    ")).unwrap();
+    let ctx = sys.context(&());
+
+    assert_matches!(
+        ctx.run("test", &[
+            [Symbol("abc".into()), Int(23), Int(42), Int(23)].into(),
+            42.into(),
+        ]).unwrap().effects().unwrap(),
+        &[23]
+    );
+
+    assert!(ctx.run("test", &[
+        [Symbol("abc".into()), Int(23), Int(42), Int(0)].into(),
+        42.into(),
+    ]).unwrap().is_failure());
+    assert!(ctx.run("test", &[
+        [Symbol("abc".into()), Int(23), Int(0), Int(23)].into(),
+        42.into(),
+    ]).unwrap().is_failure());
+    assert!(ctx.run("test", &[
+        [Symbol("def".into()), Int(23), Int(42), Int(23)].into(),
+        42.into(),
+    ]).unwrap().is_failure());
+    assert!(ctx.run("test", &[
+        [Symbol("abc".into()), Int(23), Int(42), Int(23), Int(0)].into(),
+        42.into(),
+    ]).unwrap().is_failure());
+}
+
+#[test]
 fn query_nodes_any() {
     let mut sys = make_system!(i64, i64, ());
     sys.register_node("=", |_ctx, [a, b]| (a == b).into()).unwrap();

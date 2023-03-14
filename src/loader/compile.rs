@@ -13,8 +13,8 @@ use super::parse::{
     match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref,
     match_directive, match_free_directive, match_list,
 };
-use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace, QuerySelection, QuerySource};
-use super::{Declaration, CompileError, CompileErrorKind};
+use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace, QuerySelection, QuerySource, MatchItem};
+use super::{Declaration, CompileError, CompileErrorKind, mark};
 use super::kw;
 
 
@@ -167,6 +167,8 @@ where
         Ok(NodeBranch::None { branches })
     } else if let Some((signature, arguments)) = match_directive(node, kw::QUERY)? {
         compile_query(curr, env, node, signature, arguments)
+    } else if let Some((signature, arguments)) = match_directive(node, kw::MATCH)? {
+        compile_match(curr, env, node, signature, arguments)
     } else if let Some((name, signature, arguments)) = match_free_directive(node) {
         let name = name.word().unwrap();
         let branches = compile_node_branches(curr, env, &node.nodes)?;
@@ -188,6 +190,61 @@ where
         Ok(NodeBranch::Ref { node, arguments, mode })
     } else {
         Err(CompileErrorKind::Unrecognized.at(node))
+    }
+}
+
+fn compile_match<W>(
+    curr: &Current<'_, W>,
+    env: &mut Env<'_, W>,
+    node: &Node,
+    signature: &[Item],
+    items: &[Item],
+) -> Result<NodeBranch<W>, CompileError>
+where
+    W: World,
+{
+    if_chain! {
+        if signature.len() == 1;
+        if let Some(target) = match_variable(&signature[0]);
+        let value = env.find(target, &signature[0], node)?;
+        then {
+            let buffer = Vec::with_capacity(items.len());
+            let (items, branches) = compile_match_items(curr, env, node, items, buffer)?;
+            Ok(NodeBranch::Match { value, items, branches })
+        } else {
+            Err(CompileErrorKind::InvalidDirectiveSyntax(kw::MATCH.into()).at(node))
+        }
+    }
+}
+
+fn compile_match_items<W>(
+    curr: &Current<'_, W>,
+    env: &mut Env<'_, W>,
+    node: &Node,
+    items: &[Item],
+    mut buffer: Vec<MatchItem<W>>,
+) -> Result<(Vec<MatchItem<W>>, Vec<NodeBranch<W>>), CompileError>
+where
+    W: World,
+{
+    if let Some((item, rest)) = items.split_first() {
+        if_chain! {
+            if let Some(variable) = match_variable(item);
+            if rest.first().and_then(|item| item.punctuation()) == Some(mark::QUERY);
+            then {
+                env.with(std::slice::from_ref(item), node, move |env| {
+                    let index = env.find(variable, item, node).unwrap().lexical().unwrap();
+                    buffer.push(MatchItem::BindLexical(index));
+                    compile_match_items(curr, env, node, &rest[1..], buffer)
+                })
+            } else {
+                buffer.push(MatchItem::Exact(compile_value(env, node, item)?));
+                compile_match_items(curr, env, node, rest, buffer)
+            }
+        }
+    } else {
+        let branches = compile_node_branches(curr, env, &node.nodes)?;
+        Ok((buffer, branches))
     }
 }
 
@@ -293,6 +350,30 @@ where
     Some(values)
 }
 
+fn compile_value<W>(
+    env: &mut Env<'_, W>,
+    node: &Node,
+    item: &Item,
+) -> Result<NodeValue<W>, CompileError>
+where
+    W: World,
+{
+    if let Some(var) = match_variable(item) {
+        env.find(var, item, node)
+    } else if let Some(sym) = match_symbol(item) {
+        Ok(NodeValue::Value(Value::Symbol(sym.clone())))
+    } else if let Some(num) = item.num() {
+        Ok(NodeValue::Value(match num {
+            ramble::Num::Int(i) => Value::Int(i),
+            ramble::Num::Float(f) => Value::Float(f),
+        }))
+    } else if let Some(items) = match_list(item) {
+        Ok(NodeValue::List(compile_values(env, node, items)?))
+    } else {
+        Err(CompileErrorKind::InvalidValue(item.inline_span).at(node))
+    }
+}
+
 fn compile_values<'a, W>(
     env: &mut Env<'_, W>,
     node: &Node,
@@ -303,20 +384,7 @@ where
 {
     let mut values = Vec::new();
     for item in items {
-        if let Some(var) = match_variable(item) {
-            values.push(env.find(var, item, node)?);
-        } else if let Some(sym) = match_symbol(item) {
-            values.push(NodeValue::Value(Value::Symbol(sym.clone())));
-        } else if let Some(num) = item.num() {
-            values.push(NodeValue::Value(match num {
-                ramble::Num::Int(i) => Value::Int(i),
-                ramble::Num::Float(f) => Value::Float(f),
-            }));
-        } else if let Some(items) = match_list(item) {
-            values.push(NodeValue::List(compile_values(env, node, items)?));
-        } else {
-            return Err(CompileErrorKind::InvalidValue(item.inline_span).at(node));
-        }
+        values.push(compile_value(env, node, item)?);
     }
     Ok(values)
 }

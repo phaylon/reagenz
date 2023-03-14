@@ -44,6 +44,11 @@ pub(super) enum NodeBranch<W: World> {
         selection: QuerySelection,
         branches: Vec<Self>,
     },
+    Match {
+        value: NodeValue<W>,
+        items: Vec<MatchItem<W>>,
+        branches: Vec<Self>,
+    },
     Dispatcher {
         callback: Box<Dispatcher<W>>,
         arguments: Vec<NodeValue<W>>,
@@ -78,6 +83,33 @@ where
                 let arguments = reify_values(ctx, arguments, vars);
                 let branches = branches.iter().map(|branch| Branch { vars, branch }).collect();
                 callback(ctx, arguments, branches)
+            },
+            Self::Match { value, items, branches } => 'scope: {
+                let value = reify_value(ctx, value, vars);
+                let Value::List(values) = value else {
+                    break 'scope Outcome::Failure;
+                };
+                if values.len() != items.len() {
+                    break 'scope Outcome::Failure;
+                }
+                let vars_len = vars.len();
+                let mut vars = scopeguard::guard(vars, |vars| {
+                    vars.truncate(vars_len);
+                });
+                for (item, value) in items.iter().zip(values.iter()) {
+                    match item {
+                        MatchItem::Exact(exact) => {
+                            let exact = reify_value(ctx, exact, &mut vars);
+                            if *value != exact {
+                                break 'scope Outcome::Failure;
+                            }
+                        },
+                        MatchItem::BindLexical(_) => {
+                            vars.push(value.clone());
+                        }
+                    }
+                }
+                eval_sequence(ctx, &mut vars, branches)
             },
             Self::Query { source, arguments, selection, branches } => {
                 let arguments: Args<_> = reify_values(ctx, arguments, vars);
@@ -209,6 +241,21 @@ where
     }
     Outcome::Success
 }
+fn reify_value<W>(
+    ctx: &Context<'_, W>,
+    value: &NodeValue<W>,
+    vars: &[Value<W>],
+) -> Value<W>
+where
+    W: World,
+{
+    match value {
+        NodeValue::Value(value) => value.clone(),
+        NodeValue::Lexical(index) => vars[*index].clone(),
+        NodeValue::Global(index) => ctx.global_raw(*index),
+        NodeValue::List(values) => Value::List(reify_values(ctx, values, vars)),
+    }
+}
 
 fn reify_values<W, C>(
     ctx: &Context<'_, W>,
@@ -219,12 +266,7 @@ where
     W: World,
     C: FromIterator<Value<W>>,
 {
-    values.iter().map(|value| match value {
-        NodeValue::Value(value) => value.clone(),
-        NodeValue::Lexical(index) => vars[*index].clone(),
-        NodeValue::Global(index) => ctx.global_raw(*index),
-        NodeValue::List(values) => Value::List(reify_values(ctx, values, vars)),
-    }).collect()
+    values.iter().map(|value| reify_value(ctx, value, vars)).collect()
 }
 
 pub(super) enum NodeValue<W: World> {
@@ -232,6 +274,24 @@ pub(super) enum NodeValue<W: World> {
     Lexical(usize),
     Global(usize),
     List(Vec<Self>),
+}
+
+impl<W> NodeValue<W>
+where
+    W: World,
+{
+    pub(super) fn lexical(&self) -> Option<usize> {
+        if let Self::Lexical(index) = *self {
+            Some(index)
+        } else {
+            None
+        }
+    }
+}
+
+pub(super) enum MatchItem<W: World> {
+    Exact(NodeValue<W>),
+    BindLexical(usize),
 }
 
 pub(super) enum QuerySource {
