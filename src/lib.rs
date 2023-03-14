@@ -8,5 +8,5 @@ mod core;
 pub trait World: 'static {
     type State;
     type Effect;
-    type Value: Clone + PartialEq;
+    type Value: Clone + PartialEq + PartialOrd;
 }

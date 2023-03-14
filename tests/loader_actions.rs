@@ -13,11 +13,11 @@ fn action_nodes() {
     let mut sys = make_system!((), Effect, ());
     sys.register_effect("emit-a", |_ctx, [v]| Some(Effect::A(v.int().unwrap()))).unwrap();
     sys.register_effect("emit-b", |_ctx, [v]| Some(Effect::B(v.int().unwrap()))).unwrap();
-    sys.register_node("lt", |_ctx, [a, b]| (a.int().unwrap() < b.int().unwrap()).into()).unwrap();
+    sys.register_node("<", |_ctx, [a, b]| (a < b).into()).unwrap();
     let sys = sys.load_from_str(&realign("
         action: test $a $b
           required:
-            lt? $a $b
+            <? $a $b
           effects:
             emit-a $a
             emit-b $b

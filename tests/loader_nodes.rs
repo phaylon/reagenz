@@ -77,12 +77,8 @@ fn selection_nodes() {
 #[test]
 fn none_nodes() {
     let mut sys = make_system!((), (), ());
-    sys.register_node("<", |_ctx, [a, b]| {
-        (a.int().unwrap() < b.int().unwrap()).into()
-    }).unwrap();
-    sys.register_node(">", |_ctx, [a, b]| {
-        (a.int().unwrap() > b.int().unwrap()).into()
-    }).unwrap();
+    sys.register_node("<", |_ctx, [a, b]| (a < b).into()).unwrap();
+    sys.register_node(">", |_ctx, [a, b]| (a > b).into()).unwrap();
     let sys = sys.load_from_str(&realign("
         node: test $v
           none:
@@ -97,9 +93,7 @@ fn none_nodes() {
 #[test]
 fn query_nodes_any() {
     let mut sys = make_system!(i64, i64, ());
-    sys.register_node("=", |_ctx, [a, b]| {
-        (a == b).into()
-    }).unwrap();
+    sys.register_node("=", |_ctx, [a, b]| (a == b).into()).unwrap();
     sys.register_query("nums", |_ctx, []| {
         Box::new([1, 2, 3].into_iter().map(Value::from))
     }).unwrap();
@@ -121,9 +115,7 @@ fn query_nodes_any() {
 #[test]
 fn query_nodes_all() {
     let mut sys = make_system!(i64, i64, ());
-    sys.register_node("<", |_ctx, [a, b]| {
-        (a.int() < b.int()).into()
-    }).unwrap();
+    sys.register_node("<", |_ctx, [a, b]| (a < b).into()).unwrap();
     sys.register_query("nums", |_ctx, []| {
         Box::new([1, 2, 3].into_iter().map(Value::from))
     }).unwrap();
@@ -149,9 +141,7 @@ fn query_nodes_all() {
 #[test]
 fn query_nodes_first() {
     let mut sys = make_system!(i64, i64, ());
-    sys.register_node("=", |_ctx, [a, b]| {
-        (a.int() == b.int()).into()
-    }).unwrap();
+    sys.register_node("=", |_ctx, [a, b]| (a == b).into()).unwrap();
     sys.register_query("nums", |_ctx, []| {
         Box::new([1, 2, 3].into_iter().map(Value::from))
     }).unwrap();
@@ -177,9 +167,7 @@ fn query_nodes_first() {
 #[test]
 fn query_nodes_last() {
     let mut sys = make_system!(i64, i64, ());
-    sys.register_node("=", |_ctx, [a, b]| {
-        (a.int() == b.int()).into()
-    }).unwrap();
+    sys.register_node("=", |_ctx, [a, b]| (a == b).into()).unwrap();
     sys.register_query("nums", |_ctx, []| {
         Box::new([1, 2, 3].into_iter().map(Value::from))
     }).unwrap();
@@ -206,9 +194,7 @@ fn query_nodes_last() {
 fn dispatchers() {
     let mut sys = make_system!(i64, i64, ());
     sys.register_effect("emit", |_ctx, [v]| v.int()).unwrap();
-    sys.register_node("<=", |_ctx, [a, b]| {
-        (a.int() <= b.int()).into()
-    }).unwrap();
+    sys.register_node("<=", |_ctx, [a, b]| (a <= b).into()).unwrap();
     sys.register_dispatch("select-reverse", |_sys, signature| {
         assert_eq!(signature.len(), 1);
         assert_eq!(signature[0].int().unwrap(), 23);

@@ -21,12 +21,14 @@ pub type List<T> = Arc<[T]>;
     Clone(bound=""),
     Debug(bound="W::Value: std::fmt::Debug"),
     PartialEq(bound="W::Value: PartialEq"),
+    PartialOrd="feature_allow_slow_enum",
+    PartialOrd(bound="W::Value: PartialOrd"),
 )]
 pub enum Value<W: World> {
-    Ext(W::Value),
-    Symbol(SmolStr),
     Int(i64),
     Float(f64),
+    Symbol(SmolStr),
+    Ext(W::Value),
     List(List<Self>),
 }
 
