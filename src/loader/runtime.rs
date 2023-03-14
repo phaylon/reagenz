@@ -30,6 +30,9 @@ pub(super) enum NodeBranch<W: World> {
     Sequence {
         branches: Vec<Self>,
     },
+    Complete {
+        branches: Vec<Self>,
+    },
     None {
         branches: Vec<Self>,
     },
@@ -70,6 +73,12 @@ where
             },
             Self::None { branches } => {
                 eval_none(ctx, vars, branches)
+            },
+            Self::Complete { branches } => {
+                for branch in branches {
+                    branch.eval(ctx, vars);
+                }
+                Outcome::Success
             },
             Self::Ref { node, arguments, mode } => {
                 let arguments: Args<_> = reify_values(ctx, arguments, vars);

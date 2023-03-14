@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -462,6 +463,7 @@ pub struct Context<'a, W: World> {
     state: &'a W::State,
     system: &'a System<W>,
     mode: ContextMode,
+    collect: Option<&'a dyn Fn(Action<W>) -> Outcome<W>>,
 }
 
 impl<'a, W> Context<'a, W>
@@ -469,7 +471,7 @@ where
     W: World,
 {
     pub fn new(state: &'a W::State, system: &'a System<W>) -> Self {
-        Self { state, system, mode: ContextMode::Active }
+        Self { state, system, mode: ContextMode::Active, collect: None }
     }
 
     pub fn system(&self) -> &'a System<W> {
@@ -488,6 +490,7 @@ where
             state,
             system: self.system,
             mode: self.mode,
+            collect: self.collect,
         }
     }
 
@@ -500,6 +503,7 @@ where
             state: self.state,
             system: self.system,
             mode: ContextMode::Inactive,
+            collect: self.collect,
         }
     }
 
@@ -521,6 +525,37 @@ where
 
     pub(crate) fn global_raw(&self, index: usize) -> Value<W> {
         self.system.globals[index](self)
+    }
+
+    pub(crate) fn action(&self, action: Action<W>) -> Outcome<W> {
+        if let Some(collect) = self.collect {
+            collect(action)
+        } else {
+            Outcome::Action(action)
+        }
+    }
+
+    pub fn collect_into<T>(
+        &self,
+        coll: &mut T,
+        name: &str,
+        arguments: &[Value<W>],
+    ) -> Result<Outcome<W>, RunError>
+    where
+        T: Extend<Action<W>>,
+    {
+        let coll = RefCell::new(coll);
+        let collect = |action| {
+            coll.borrow_mut().extend([action]);
+            Outcome::Success
+        };
+        let ctx = Context {
+            collect: Some(&collect),
+            state: self.state,
+            system: self.system,
+            mode: self.mode,
+        };
+        ctx.run(name, arguments)
     }
 
     fn resolve_symbol(
