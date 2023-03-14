@@ -480,6 +480,17 @@ where
         self.state
     }
 
+    pub fn with_state<'b>(&self, state: &'b W::State) -> Context<'b, W>
+    where
+        'a: 'b,
+    {
+        Context {
+            state,
+            system: self.system,
+            mode: self.mode,
+        }
+    }
+
     pub fn is_active(&self) -> bool {
         self.mode == ContextMode::Active
     }
