@@ -75,6 +75,26 @@ fn selection_nodes() {
 }
 
 #[test]
+fn none_nodes() {
+    let mut sys = make_system!((), (), ());
+    sys.register_node("<", |_ctx, [a, b]| {
+        (a.int().unwrap() < b.int().unwrap()).into()
+    }).unwrap();
+    sys.register_node(">", |_ctx, [a, b]| {
+        (a.int().unwrap() > b.int().unwrap()).into()
+    }).unwrap();
+    let sys = sys.load_from_str(&realign("
+        node: test $v
+          none:
+            >? $v 5
+            <? $v -5
+    ")).unwrap();
+    assert!(sys.context(&()).run("test", &[Value::Int(-10)]).unwrap().is_failure());
+    assert!(sys.context(&()).run("test", &[Value::Int(0)]).unwrap().is_success());
+    assert!(sys.context(&()).run("test", &[Value::Int(10)]).unwrap().is_failure());
+}
+
+#[test]
 fn query_nodes_any() {
     let mut sys = make_system!(i64, i64, ());
     sys.register_node("=", |_ctx, [a, b]| {

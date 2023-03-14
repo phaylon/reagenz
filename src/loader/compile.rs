@@ -162,6 +162,9 @@ where
     } else if match_group_directive(node, kw::SELECT)? {
         let branches = compile_node_branches(curr, env, &node.nodes)?;
         Ok(NodeBranch::Select { branches })
+    } else if match_group_directive(node, kw::NONE)? {
+        let branches = compile_node_branches(curr, env, &node.nodes)?;
+        Ok(NodeBranch::None { branches })
     } else if let Some((signature, arguments)) = match_directive(node, kw::QUERY)? {
         compile_query(curr, env, node, signature, arguments)
     } else if let Some((name, signature, arguments)) = match_free_directive(node) {

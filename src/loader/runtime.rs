@@ -30,6 +30,9 @@ pub(super) enum NodeBranch<W: World> {
     Sequence {
         branches: Vec<Self>,
     },
+    None {
+        branches: Vec<Self>,
+    },
     Ref {
         node: usize,
         arguments: Vec<NodeValue<W>>,
@@ -59,6 +62,9 @@ where
             },
             Self::Sequence { branches } => {
                 eval_sequence(ctx, vars, branches)
+            },
+            Self::None { branches } => {
+                eval_none(ctx, vars, branches)
             },
             Self::Ref { node, arguments, mode } => {
                 let arguments: Args<_> = reify_values(ctx, arguments, vars);
@@ -167,6 +173,24 @@ where
         }
     }
     Outcome::Failure
+}
+
+fn eval_none<W>(
+    ctx: &Context<'_, W>,
+    vars: &mut VarSpace<W>,
+    branches: &[NodeBranch<W>],
+) -> Outcome<W>
+where
+    W: World,
+{
+    let ctx = ctx.to_inactive();
+    for branch in branches {
+        let result = branch.eval(&ctx, vars);
+        if result.is_success() {
+            return Outcome::Failure;
+        }
+    }
+    Outcome::Success
 }
 
 fn eval_sequence<W>(

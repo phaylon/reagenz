@@ -6,6 +6,7 @@ pub(super) const SEQUENCE: &str = "do";
 pub(super) const REQUIRED: &str = "required";
 pub(super) const EFFECTS: &str = "effects";
 pub(super) const QUERY: &str = "for";
+pub(super) const NONE: &str = "none";
 
 pub(crate) const DIRECTIVES: &[&str] = &[
     ACTION,
@@ -15,4 +16,5 @@ pub(crate) const DIRECTIVES: &[&str] = &[
     REQUIRED,
     EFFECTS,
     QUERY,
+    NONE,
 ];
