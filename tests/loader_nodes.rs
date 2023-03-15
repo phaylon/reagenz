@@ -1,7 +1,7 @@
 use assert_matches::assert_matches;
 use common::realign;
 use reagenz::system::{Outcome, Action};
-use reagenz::value::Value;
+use reagenz::value::{Value, Args};
 
 
 mod common;
@@ -42,6 +42,8 @@ fn selection_nodes() {
     let mut sys = make_system!(i64, i64, ());
     sys.register_node("emit", |_ctx, [val]| {
         Outcome::Action(Action {
+            name: "emit".into(),
+            signature: Args::from_iter([val.clone()]),
             effects: Vec::from([val.int().unwrap()]),
         })
     }).unwrap();
@@ -247,7 +249,11 @@ fn dispatchers() {
                     return result;
                 }
             }
-            Outcome::from_effect(100 + arguments[0].int().unwrap())
+            Outcome::Action(Action {
+                name: "fallback".into(),
+                signature: Args::new(),
+                effects: Vec::from([100 + arguments[0].int().unwrap()]),
+            })
         }))
     }).unwrap();
     let sys = sys.load_from_str(&realign("
@@ -263,8 +269,8 @@ fn dispatchers() {
             check! 3 $value
     ")).unwrap();
     let ctx = sys.context(&0);
-    assert_eq!(ctx.run("test", &[1.into()]).unwrap(), Outcome::from_effect(1));
-    assert_eq!(ctx.run("test", &[2.into()]).unwrap(), Outcome::from_effect(2));
-    assert_eq!(ctx.run("test", &[3.into()]).unwrap(), Outcome::from_effect(3));
-    assert_eq!(ctx.run("test", &[0.into()]).unwrap(), Outcome::from_effect(100));
+    assert_eq!(ctx.run("test", &[1.into()]).unwrap().effects().unwrap(), &[1]);
+    assert_eq!(ctx.run("test", &[2.into()]).unwrap().effects().unwrap(), &[2]);
+    assert_eq!(ctx.run("test", &[3.into()]).unwrap().effects().unwrap(), &[3]);
+    assert_eq!(ctx.run("test", &[0.into()]).unwrap().effects().unwrap(), &[100]);
 }

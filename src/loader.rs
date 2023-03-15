@@ -43,8 +43,11 @@ where
     }
 
     for (name, decl) in node_decls {
-        let hook = compile_declaration(decl, &system)?;
-        system.replace_node_hook_raw(&name, hook);
+        let hooks = compile_declaration(decl, &system)?;
+        system.replace_node_hook_raw(&name, hooks.node);
+        if let Some(hook) = hooks.discovery {
+            system.set_discovery_hook(name.clone(), hook);
+        }
     }
 
     Ok(system)

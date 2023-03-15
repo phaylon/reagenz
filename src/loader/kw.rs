@@ -9,6 +9,7 @@ pub(super) const QUERY: &str = "for";
 pub(super) const NONE: &str = "none";
 pub(super) const MATCH: &str = "match";
 pub(super) const COMPLETE: &str = "complete";
+pub(super) const DISCOVER: &str = "discover";
 
 pub(crate) const DIRECTIVES: &[&str] = &[
     ACTION,
@@ -21,4 +22,5 @@ pub(crate) const DIRECTIVES: &[&str] = &[
     NONE,
     MATCH,
     COMPLETE,
+    DISCOVER,
 ];

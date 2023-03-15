@@ -6,6 +6,7 @@ use smol_str::SmolStr;
 use crate::World;
 use crate::system::{
     System, NodeHook, SymbolKind, ArityMismatch, Outcome, Action, DispatchBuilderError,
+    DiscoveryHook,
 };
 use crate::value::{Value};
 
@@ -13,12 +14,19 @@ use super::parse::{
     match_group_directive, match_node_ref, match_variable, match_symbol, match_raw_ref,
     match_directive, match_free_directive, match_list,
 };
-use super::runtime::{NodeBranch, NodeValue, EffectRef, VarSpace, QuerySelection, QuerySource, MatchItem};
+use super::runtime::{
+    NodeBranch, NodeValue, EffectRef, VarSpace, QuerySelection, QuerySource, MatchItem,
+};
 use super::{Declaration, CompileError, CompileErrorKind, mark};
 use super::kw;
 
 
-type HookResult<W> = Result<Box<NodeHook<W>>, CompileError>;
+type HookResult<W> = Result<Hooks<W>, CompileError>;
+
+pub(super) struct Hooks<W: World> {
+    pub node: Box<NodeHook<W>>,
+    pub discovery: Option<Box<DiscoveryHook<W>>>,
+}
 
 pub(super) fn compile_declaration<W>(decl: Declaration<'_>, system: &System<W>) -> HookResult<W>
 where
@@ -47,15 +55,21 @@ where
 {
     let arity = parameters.len();
     let mut env = Env::new(curr.system);
+    let mut discovery_env_max_len = 0;
 
-    let (required, effects) = env.with(parameters, curr.top, |env| {
+    let (required, effects, discovery) = env.with(parameters, curr.top, |env| {
         let mut required = Vec::new();
         let mut effects = Vec::new();
+        let mut discovery = Vec::new();
         for node in &curr.top.nodes {
             if match_group_directive(node, kw::REQUIRED)? {
                 required.extend(compile_node_branches(curr, env, &node.nodes)?);
             } else if match_group_directive(node, kw::EFFECTS)? {
                 effects.extend(compile_effects(curr, env, &node.nodes)?);
+            } else if match_group_directive(node, kw::DISCOVER)? {
+                let mut env = Env::new(curr.system);
+                discovery.extend(compile_node_branches(curr, &mut env, &node.nodes)?);
+                discovery_env_max_len = discovery_env_max_len.max(env.max_len);
             } else {
                 return Err(CompileErrorKind::Unrecognized.at(node));
             }
@@ -63,32 +77,45 @@ where
         Ok((
             NodeBranch::Sequence { branches: required },
             effects,
+            NodeBranch::Complete { branches: discovery },
         ))
     })?;
 
     let name = curr.name.clone();
     let var_len = env.max_len;
 
-    Ok(Box::new(move |ctx, arguments| {
-        assert_eq!(arguments.len(), arity, "arity mismatch reached effect `{}`", name);
-        if !ctx.is_active() {
-            return Outcome::Failure;
-        }
-        let mut vars = VarSpace::with_capacity(var_len);
-        vars.extend(arguments.iter().cloned());
-        if !required.eval(&ctx.to_inactive(), &mut vars).is_success() {
-            return Outcome::Failure;
-        }
-        let mut action = Action::default();
-        for effect_ref in &effects {
-            if let Some(effect) = effect_ref.eval(ctx, &mut vars) {
-                action.effects.push(effect);
-            } else {
+    Ok(Hooks {
+        node: Box::new(move |ctx, arguments| {
+            assert_eq!(arguments.len(), arity, "arity mismatch reached effect `{}`", name);
+            if !ctx.is_active() {
                 return Outcome::Failure;
             }
-        }
-        ctx.action(action)
-    }))
+            let mut vars = VarSpace::with_capacity(var_len);
+            vars.extend(arguments.iter().cloned());
+            if required.eval(&ctx.to_inactive(), &mut vars).is_non_success() {
+                return Outcome::Failure;
+            }
+            let mut action = Action {
+                name: name.clone(),
+                signature: arguments.into(),
+                effects: Vec::new(),
+            };
+            for effect_ref in &effects {
+                if let Some(effect) = effect_ref.eval(ctx, &mut vars) {
+                    action.effects.push(effect);
+                } else {
+                    return Outcome::Failure;
+                }
+            }
+            ctx.action(action)
+        }),
+        discovery: Some(Box::new(move |ctx, action_buffer| {
+            let mut vars = VarSpace::with_capacity(discovery_env_max_len);
+            ctx.with_collection(action_buffer, |ctx| {
+                discovery.eval(ctx, &mut vars);
+            });
+        })),
+    })
 }
 
 fn compile_node<W>(curr: &Current<'_, W>, parameters: &[Item]) -> HookResult<W>
@@ -106,12 +133,15 @@ where
     let name = curr.name.clone();
     let var_len = env.max_len;
 
-    Ok(Box::new(move |ctx, arguments| {
-        assert_eq!(arguments.len(), arity, "arity mismatch reached node `{}`", name);
-        let mut vars = VarSpace::with_capacity(var_len);
-        vars.extend(arguments.iter().cloned());
-        logic.eval(ctx, &mut vars)
-    }))
+    Ok(Hooks {
+        node: Box::new(move |ctx, arguments| {
+            assert_eq!(arguments.len(), arity, "arity mismatch reached node `{}`", name);
+            let mut vars = VarSpace::with_capacity(var_len);
+            vars.extend(arguments.iter().cloned());
+            logic.eval(ctx, &mut vars)
+        }),
+        discovery: None,
+    })
 }
 
 fn compile_effect<W>(

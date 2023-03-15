@@ -135,6 +135,14 @@ where
                     vars.truncate(vars_len);
                 });
                 match selection {
+                    QuerySelection::Complete => {
+                        for item in iter {
+                            vars.push(item);
+                            eval_sequence(ctx, &mut vars, branches);
+                            vars.pop();
+                        }
+                        Outcome::Success
+                    },
                     QuerySelection::Any => 'selection: {
                         for item in iter {
                             vars.push(item);
@@ -313,6 +321,7 @@ pub(super) enum QuerySelection {
     All,
     First,
     Last,
+    Complete,
 }
 
 impl QuerySelection {
@@ -322,6 +331,7 @@ impl QuerySelection {
             "all" => Some(Self::All),
             "first" => Some(Self::First),
             "last" => Some(Self::Last),
+            "complete" => Some(Self::Complete),
             _ => None,
         }
     }

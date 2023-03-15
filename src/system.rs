@@ -16,6 +16,7 @@ use crate::value::{Value, ValueIter, StrExt, Args};
 
 type SymbolMap = HashMap<SmolStr, (usize, SymbolInfo)>;
 type VariableMap = HashMap<SmolStr, usize>;
+type DiscoveryMap<W> = HashMap<SmolStr, Box<DiscoveryHook<W>>>;
 
 pub type Dispatcher<W> = dyn Fn(
     &Context<'_, W>,
@@ -35,6 +36,7 @@ pub(crate) type EffectHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<<
 pub(crate) type QueryHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Box<ValueIter<W>>;
 pub(crate) type GetterHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<Value<W>>;
 pub(crate) type GlobalHook<W> = dyn Fn(&Context<'_, W>) -> Value<W>;
+pub(crate) type DiscoveryHook<W> = dyn Fn(&Context<'_, W>, &mut Vec<Action<W>>);
 
 #[derive(Derivative)]
 #[derivative(
@@ -52,10 +54,6 @@ impl<W> Outcome<W>
 where
     W: World,
 {
-    pub fn from_effect(effect: W::Effect) -> Self {
-        Self::from(Vec::from([effect]))
-    }
-
     pub fn is_success(&self) -> bool {
         matches!(self, Self::Success)
     }
@@ -85,15 +83,6 @@ where
     }
 }
 
-impl<W> From<Vec<W::Effect>> for Outcome<W>
-where
-    W: World,
-{
-    fn from(effects: Vec<W::Effect>) -> Self {
-        Outcome::Action(Action { effects })
-    }
-}
-
 impl<W> From<Action<W>> for Outcome<W>
 where
     W: World,
@@ -118,12 +107,13 @@ where
 
 #[derive(Derivative)]
 #[derivative(
-    Default(bound=""),
-    Debug(bound="W::Effect: std::fmt::Debug"),
+    Debug(bound="W::Effect: std::fmt::Debug, W::Value: std::fmt::Debug"),
     Clone(bound="W::Effect: Clone"),
     PartialEq(bound="W::Effect: PartialEq"), Eq(bound="W::Effect: Eq"),
 )]
 pub struct Action<W: World> {
+    pub name: SmolStr,
+    pub signature: Args<Value<W>>,
     pub effects: Vec<W::Effect>,
 }
 
@@ -131,6 +121,7 @@ pub struct System<W: World> {
     symbols: SymbolMap,
     global_variables: VariableMap,
     dispatch_builders: DispatchBuilderMap<W>,
+    discovery: DiscoveryMap<W>,
     nodes: Vec<Box<NodeHook<W>>>,
     effects: Vec<Box<EffectHook<W>>>,
     queries: Vec<Box<QueryHook<W>>>,
@@ -147,6 +138,7 @@ where
             symbols: SymbolMap::new(),
             global_variables: VariableMap::new(),
             dispatch_builders: DispatchBuilderMap::new(),
+            discovery: DiscoveryMap::new(),
             nodes: Vec::new(),
             effects: Vec::new(),
             queries: Vec::new(),
@@ -375,6 +367,10 @@ where
         let index = self.symbol_index(name).expect("can only replace known symbols");
         self.nodes[index] = hook;
     }
+
+    pub(crate) fn set_discovery_hook(&mut self, name: SmolStr, hook: Box<DiscoveryHook<W>>) {
+        self.discovery.insert(name, hook);
+    }
 }
 
 impl<W> Default for System<W>
@@ -535,14 +531,10 @@ where
         }
     }
 
-    pub fn collect_into<T>(
-        &self,
-        coll: &mut T,
-        name: &str,
-        arguments: &[Value<W>],
-    ) -> Result<Outcome<W>, RunError>
+    pub fn with_collection<T, F, R>(&self, coll: &mut T, inner: F) -> R
     where
         T: Extend<Action<W>>,
+        F: FnOnce(&Context<'_, W>) -> R,
     {
         let coll = RefCell::new(coll);
         let collect = |action| {
@@ -555,7 +547,19 @@ where
             system: self.system,
             mode: self.mode,
         };
-        ctx.run(name, arguments)
+        inner(&ctx)
+    }
+
+    pub fn collect_into<T>(
+        &self,
+        coll: &mut T,
+        name: &str,
+        arguments: &[Value<W>],
+    ) -> Result<Outcome<W>, RunError>
+    where
+        T: Extend<Action<W>>,
+    {
+        self.with_collection(coll, |ctx| ctx.run(name, arguments))
     }
 
     fn resolve_symbol(
@@ -603,6 +607,26 @@ where
             SymbolKind::Query => Ok(self.query_raw(index, arguments)),
             SymbolKind::Getter => Ok(Box::new(self.get_raw(index, arguments).into_iter())),
             _ => unreachable!(),
+        }
+    }
+
+    pub fn discover(&self, name: &str, actions: &mut Vec<Action<W>>) -> Result<(), RunError> {
+        let Some((_, info)) = self.system.symbols.get(name) else {
+            return Err(RunError::Unknown);
+        };
+        if info.kind != SymbolKind::Action {
+            return Err(RunError::Kind(info.kind));
+        }
+        let Some(hook) = self.system.discovery.get(name) else {
+            return Ok(());
+        };
+        hook(self, actions);
+        Ok(())
+    }
+
+    pub fn discover_all(&self, actions: &mut Vec<Action<W>>) {
+        for hook in self.system.discovery.values() {
+            hook(self, actions);
         }
     }
 }
