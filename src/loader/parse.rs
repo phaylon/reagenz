@@ -25,13 +25,17 @@ pub(super) fn match_ref_declaration(items: &[Item]) -> Option<(&SmolStr, &[Item]
 pub(super) fn match_node_ref(items: &[Item]) -> Option<(&Item, ContextMode, &[Item])> {
     let (name_item, items) = items.split_first()?;
     match_symbol(name_item)?;
-    let (mark, items) = items.split_first()?;
-    let is_active = match mark.punctuation()? {
-        mark::GOAL => Some(ContextMode::Active),
-        mark::QUERY => Some(ContextMode::Inactive),
-        _ => None,
-    }?;
-    Some((name_item, is_active, items))
+    let (mode, items) =
+        if items.first().map_or(false, |i| match_mark(i, mark::QUERY)) {
+            (ContextMode::Inactive, &items[1..])
+        } else {
+            (ContextMode::Active, items)
+        };
+    Some((name_item, mode, items))
+}
+
+fn match_mark(item: &Item, mark: char) -> bool {
+    item.punctuation().map_or(false, |p| p == mark)
 }
 
 pub(super) fn match_raw_ref(items: &[Item]) -> Option<(&Item, &[Item])> {

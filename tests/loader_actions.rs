@@ -17,7 +17,7 @@ fn action_nodes() {
     let sys = sys.load_from_str(&realign("
         action: test $a $b
           required:
-            <? $a $b
+            < $a $b
           effects:
             emit-a $a
             emit-b $b

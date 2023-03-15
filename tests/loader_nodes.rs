@@ -56,10 +56,10 @@ fn selection_nodes() {
           select:
             do:
               is-state-value? $a
-              emit! 1
+              emit 1
             do:
               is-state-value? $b
-              emit! 2
+              emit 2
     ")).unwrap();
 
     assert_matches!(
@@ -84,8 +84,8 @@ fn none_nodes() {
     let sys = sys.load_from_str(&realign("
         node: test $v
           none:
-            >? $v 5
-            <? $v -5
+            > $v 5
+            < $v -5
     ")).unwrap();
     assert!(sys.context(&()).run("test", &[Value::Int(-10)]).unwrap().is_failure());
     assert!(sys.context(&()).run("test", &[Value::Int(0)]).unwrap().is_success());
@@ -103,7 +103,7 @@ fn match_nodes() {
             emit $v
         node: test $value $lex
           match $value: abc $v? $lex $v
-            output! $v
+            output $v
     ")).unwrap();
     let ctx = sys.context(&());
 
@@ -143,7 +143,7 @@ fn query_nodes_any() {
     let sys = sys.load_from_str(&realign("
         node: test $v
           for any $n: nums
-            =? $v $n
+            = $v $n
     ")).unwrap();
     assert_matches!(
         sys.context(&0).run("test", &[3.into()]).unwrap(),
@@ -165,7 +165,7 @@ fn query_nodes_all() {
     let sys = sys.load_from_str(&realign("
         node: test $v
           for all $n: nums
-            <? $v $n
+            < $v $n
     ")).unwrap();
     assert_matches!(
         sys.context(&0).run("test", &[0.into()]).unwrap(),
@@ -191,7 +191,7 @@ fn query_nodes_first() {
     let sys = sys.load_from_str(&realign("
         node: test $v
           for first $n: nums
-            =? $v $n
+            = $v $n
     ")).unwrap();
     assert_matches!(
         sys.context(&0).run("test", &[1.into()]).unwrap(),
@@ -217,7 +217,7 @@ fn query_nodes_last() {
     let sys = sys.load_from_str(&realign("
         node: test $v
           for last $n: nums
-            =? $v $n
+            = $v $n
     ")).unwrap();
     assert_matches!(
         sys.context(&0).run("test", &[3.into()]).unwrap(),
@@ -259,14 +259,14 @@ fn dispatchers() {
     let sys = sys.load_from_str(&realign("
         action: check $case $value
           required:
-            <=? $case $value
+            <= $case $value
           effects:
             emit $case
         node: test $value
           select-reverse 23: $value
-            check! 1 $value
-            check! 2 $value
-            check! 3 $value
+            check 1 $value
+            check 2 $value
+            check 3 $value
     ")).unwrap();
     let ctx = sys.context(&0);
     assert_eq!(ctx.run("test", &[1.into()]).unwrap().effects().unwrap(), &[1]);

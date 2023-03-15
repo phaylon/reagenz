@@ -30,15 +30,15 @@ fn values() {
           effects:
             emit $v
         node: test-int
-          value! 23
+          value 23
         node: test-float
-          value! 0.0
+          value 0.0
         node: test-symbol
-          value! abc
+          value abc
         node: test-var $v
-          value! $v
+          value $v
         node: test-list $v
-          value! [23 0.0 abc $v]
+          value [23 0.0 abc $v]
     ")).unwrap();
     let ctx = sys.context(&());
     assert_eq!(

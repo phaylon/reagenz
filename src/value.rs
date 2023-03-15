@@ -191,7 +191,6 @@ mod tests {
             "$a;b",
             "$a(b",
             "$a:b",
-            "$a!b",
             "$a?b",
         ] {
             assert!(!fail.is_variable(), "string {fail:?} should not be a valid variable");
@@ -221,7 +220,6 @@ mod tests {
             "a;b",
             "a(b",
             "a:b",
-            "a!b",
             "a?b",
         ] {
             assert!(!fail.is_symbol(), "string {fail:?} should not be a valid symbol");

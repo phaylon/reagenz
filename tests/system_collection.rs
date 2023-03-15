@@ -13,10 +13,10 @@ fn collection() {
             emit $value
         node: test
           complete:
-            test-action! 1
-            test-action! 2
-            test-action! wrong
-            test-action! 3
+            test-action 1
+            test-action 2
+            test-action wrong
+            test-action 3
     ")).unwrap();
     let ctx = sys.context(&());
     let mut actions = Vec::new();
@@ -38,7 +38,7 @@ fn discovery() {
         action: test $value
           discover:
             for complete $n: nums
-              test! $n
+              test $n
           effects:
             emit $value
     ")).unwrap();
