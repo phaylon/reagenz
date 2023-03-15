@@ -38,9 +38,13 @@ fn discovery() {
         action: test $value
           discover:
             for complete $n: nums
+              test-wrong
               test $n
           effects:
             emit $value
+        action: test-wrong
+          effects:
+            emit 23
     ")).unwrap();
 
     let ctx = sys.context(&());

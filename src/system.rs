@@ -625,8 +625,11 @@ where
     }
 
     pub fn discover_all(&self, actions: &mut Vec<Action<W>>) {
-        for hook in self.system.discovery.values() {
-            hook(self, actions);
+        let mut buffer = Vec::new();
+        for (name, hook) in &self.system.discovery {
+            hook(self, &mut buffer);
+            buffer.retain(|action| action.name == *name);
+            actions.extend(buffer.drain(..));
         }
     }
 }
