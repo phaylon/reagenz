@@ -10,7 +10,7 @@ mod common;
 struct Test;
 
 impl World for Test {
-    type State = ();
+    type State<'a> = &'a ();
     type Effect = ();
     type Value = ();
 }

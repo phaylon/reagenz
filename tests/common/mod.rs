@@ -6,7 +6,7 @@ macro_rules! make_system {
         {
             struct TestSystem;
             impl reagenz::World for TestSystem {
-                type State = $state;
+                type State<'a> = &'a $state;
                 type Effect = $effect;
                 type Value = $value;
             }

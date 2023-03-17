@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -36,7 +37,7 @@ pub(crate) type EffectHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<<
 pub(crate) type QueryHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Box<ValueIter<W>>;
 pub(crate) type GetterHook<W> = dyn Fn(&Context<'_, W>, &[Value<W>]) -> Option<Value<W>>;
 pub(crate) type GlobalHook<W> = dyn Fn(&Context<'_, W>) -> Value<W>;
-pub(crate) type DiscoveryHook<W> = dyn Fn(&Context<'_, W>, &mut Vec<Action<W>>);
+pub(crate) type DiscoveryHook<W> = dyn Fn(&Context<'_, W>, ActionCollection<W>);
 
 #[derive(Derivative)]
 #[derivative(
@@ -151,7 +152,7 @@ where
         load_core_system(Self::new()).unwrap()
     }
 
-    pub fn context<'a>(&'a self, state: &'a W::State) -> Context<'a, W> {
+    pub fn context<'a>(&'a self, state: W::State<'a>) -> Context<'a, W> {
         Context::new(state, self)
     }
 
@@ -451,22 +452,37 @@ where
     })
 }
 
+pub type ActionCollection<W> = Rc<RefCell<Vec<Action<W>>>>;
+
+fn commit_action_collection<W>(
+    name: &str,
+    actions: &mut Vec<Action<W>>,
+    coll: &ActionCollection<W>,
+)
+where
+    W: World,
+{
+    let mut coll = coll.borrow_mut();
+    coll.retain(|action| action.name == name);
+    actions.extend(coll.drain(..));
+}
+
 #[derive(Derivative)]
 #[derivative(
     Clone(bound=""),
 )]
 pub struct Context<'a, W: World> {
-    state: &'a W::State,
+    state: W::State<'a>,
     system: &'a System<W>,
     mode: ContextMode,
-    collect: Option<&'a dyn Fn(Action<W>) -> Outcome<W>>,
+    collect: Option<ActionCollection<W>>,
 }
 
 impl<'a, W> Context<'a, W>
 where
     W: World,
 {
-    pub fn new(state: &'a W::State, system: &'a System<W>) -> Self {
+    pub fn new(state: W::State<'a>, system: &'a System<W>) -> Self {
         Self { state, system, mode: ContextMode::Active, collect: None }
     }
 
@@ -474,11 +490,11 @@ where
         self.system
     }
 
-    pub fn state(&self) -> &'a W::State {
-        self.state
+    pub fn state(&self) -> W::State<'a> {
+        self.state.clone()
     }
 
-    pub fn with_state<'b>(&self, state: &'b W::State) -> Context<'b, W>
+    pub fn with_state<'b>(&self, state: W::State<'b>) -> Context<'b, W>
     where
         'a: 'b,
     {
@@ -486,7 +502,7 @@ where
             state,
             system: self.system,
             mode: self.mode,
-            collect: self.collect,
+            collect: self.collect.clone(),
         }
     }
 
@@ -496,10 +512,10 @@ where
 
     pub fn to_inactive(&self) -> Self {
         Self {
-            state: self.state,
+            state: self.state.clone(),
             system: self.system,
             mode: ContextMode::Inactive,
-            collect: self.collect,
+            collect: self.collect.clone(),
         }
     }
 
@@ -524,42 +540,35 @@ where
     }
 
     pub(crate) fn action(&self, action: Action<W>) -> Outcome<W> {
-        if let Some(collect) = self.collect {
-            collect(action)
+        if let Some(collect) = &self.collect {
+            collect.borrow_mut().push(action);
+            Outcome::Success
         } else {
             Outcome::Action(action)
         }
     }
 
-    pub fn with_collection<T, F, R>(&self, coll: &mut T, inner: F) -> R
+    pub fn with_collection_in<F, R>(&self, coll: ActionCollection<W>, inner: F) -> R
     where
-        T: Extend<Action<W>>,
         F: FnOnce(&Context<'_, W>) -> R,
     {
-        let coll = RefCell::new(coll);
-        let collect = |action| {
-            coll.borrow_mut().extend([action]);
-            Outcome::Success
-        };
         let ctx = Context {
-            collect: Some(&collect),
-            state: self.state,
+            collect: Some(coll),
+            state: self.state.clone(),
             system: self.system,
             mode: self.mode,
         };
         inner(&ctx)
     }
 
-    pub fn collect_into<T>(
+    pub fn collect_into(
         &self,
-        coll: &mut T,
+        coll: ActionCollection<W>,
         name: &str,
         arguments: &[Value<W>],
     ) -> Result<Outcome<W>, RunError>
-    where
-        T: Extend<Action<W>>,
     {
-        self.with_collection(coll, |ctx| ctx.run(name, arguments))
+        self.with_collection_in(coll, |ctx| ctx.run(name, arguments))
     }
 
     fn resolve_symbol(
@@ -620,16 +629,17 @@ where
         let Some(hook) = self.system.discovery.get(name) else {
             return Ok(());
         };
-        hook(self, actions);
+        let buffer = ActionCollection::default();
+        hook(self, buffer.clone());
+        commit_action_collection(name, actions, &buffer);
         Ok(())
     }
 
     pub fn discover_all(&self, actions: &mut Vec<Action<W>>) {
-        let mut buffer = Vec::new();
+        let buffer = ActionCollection::default();
         for (name, hook) in &self.system.discovery {
-            hook(self, &mut buffer);
-            buffer.retain(|action| action.name == *name);
-            actions.extend(buffer.drain(..));
+            hook(self, buffer.clone());
+            commit_action_collection(name, actions, &buffer);
         }
     }
 }

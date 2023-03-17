@@ -1,4 +1,7 @@
+use std::rc::Rc;
+
 use common::realign;
+use reagenz::system::ActionCollection;
 use reagenz::value::Value;
 
 mod common;
@@ -19,8 +22,9 @@ fn collection() {
             test-action 3
     ")).unwrap();
     let ctx = sys.context(&());
-    let mut actions = Vec::new();
-    assert!(ctx.collect_into(&mut actions, "test", &[]).unwrap().is_success());
+    let actions = ActionCollection::default();
+    assert!(ctx.collect_into(actions.clone(), "test", &[]).unwrap().is_success());
+    let actions = Rc::try_unwrap(actions).expect("single user").into_inner();
     assert_eq!(actions.len(), 3);
     assert_eq!(&actions[0].effects, &[1]);
     assert_eq!(&actions[1].effects, &[2]);

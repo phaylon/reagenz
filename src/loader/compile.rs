@@ -111,7 +111,7 @@ where
         }),
         discovery: Some(Box::new(move |ctx, action_buffer| {
             let mut vars = VarSpace::with_capacity(discovery_env_max_len);
-            ctx.with_collection(action_buffer, |ctx| {
+            ctx.with_collection_in(action_buffer, |ctx| {
                 discovery.eval(ctx, &mut vars);
             });
         })),

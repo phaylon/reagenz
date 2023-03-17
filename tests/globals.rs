@@ -9,7 +9,7 @@ mod common;
 #[test]
 fn globals() {
     let mut sys = make_system!(i64, i64, ());
-    sys.register_global("$X", |ctx| (*ctx.state()).into()).unwrap();
+    sys.register_global("$X", |ctx| ctx.state().clone().into()).unwrap();
     sys.register_effect("emit", |_, [v]| v.int()).unwrap();
     let sys = sys.load_from_str(&realign("
         action: test
