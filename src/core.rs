@@ -40,6 +40,9 @@ where
         }
     }).unwrap();
 
+    sys.register_node("fail", |_, []| false.into()).unwrap();
+    sys.register_node("ok", |_, []| true.into()).unwrap();
+
     Ok(sys)
 }
 
