@@ -15,6 +15,9 @@ where
     sys.register_node("is-external", |_, [v]| v.is_ext().into()).unwrap();
     sys.register_node("is-list", |_, [v]| v.is_list().into()).unwrap();
 
+    sys.register_node("eq", |_, [a, b]| (a == b).into()).unwrap();
+    sys.register_node("ne", |_, [a, b]| (a != b).into()).unwrap();
+
     sys.register_query("list-items", |_, [list]| {
         if let Value::List(values) = list {
             Box::new(ListIter::new(values.clone()))
