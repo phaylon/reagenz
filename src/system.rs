@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 use crate::World;
 use crate::core::load_core_system;
 use crate::loader::kw::DIRECTIVES;
-use crate::loader::{LoadError, load_str, Branch};
+use crate::loader::{LoadError, load_str_set, Branch};
 use crate::value::{Value, ValueIter, StrExt, Args};
 
 
@@ -157,7 +157,16 @@ where
     }
 
     pub fn load_from_str(self, content: &str) -> Result<Self, LoadError> {
-        load_str(content, self, SymbolSourceProto::Api)
+        load_str_set([(content, SymbolSourceProto::Api)], self)
+    }
+
+    fn read_file(&self, path: &Path) -> Result<String, FileLoadError> {
+        std::fs::read_to_string(path).map_err(|error| {
+            FileLoadError {
+                path: path.into(),
+                kind: FileLoadErrorKind::Read(Arc::new(error)),
+            }
+        })
     }
 
     pub fn load_from_file<P>(self, path: P) -> Result<Self, FileLoadError>
@@ -165,25 +174,18 @@ where
         P: AsRef<Path>,
     {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path).map_err(|error| {
-            FileLoadError {
-                path: path.into(),
-                kind: FileLoadErrorKind::Read(Arc::new(error)),
-            }
-        })?;
-        load_str(&content, self, SymbolSourceProto::File { path: path.into() }).map_err(|error| {
-            FileLoadError {
-                path: path.into(),
-                kind: FileLoadErrorKind::Load(error),
-            }
-        })
+        let content = self.read_file(path)?;
+        load_str_set([(content.as_str(), SymbolSourceProto::File { path: path.into() })], self)
+            .map_err(FileLoadErrorKind::Load)
+            .map_err(|kind| FileLoadError { kind, path: path.into() })
     }
 
-    pub fn load_from_directory<P>(mut self, path: P) -> Result<Self, FileLoadError>
+    pub fn load_from_directory<P>(self, path: P) -> Result<Self, FileLoadError>
     where
         P: AsRef<Path>,
     {
         let path = path.as_ref();
+        let mut contents = Vec::new();
         'entries: for entry in WalkDir::new(path) {
             let entry = entry.map_err(|error| {
                 FileLoadError {
@@ -194,9 +196,13 @@ where
             if !entry.file_name().to_str().map_or(false, |f| f.ends_with(".rea")) {
                 continue 'entries;
             }
-            self = self.load_from_file(entry.path())?;
+            let content = self.read_file(entry.path())?;
+            contents.push((content, SymbolSourceProto::File { path: path.into() }));
         }
-        Ok(self)
+        let str_set = contents.iter().map(|(content, source)| (content.as_str(), source.clone()));
+        load_str_set(str_set, self)
+            .map_err(FileLoadErrorKind::Load)
+            .map_err(|kind| FileLoadError { kind, path: path.into() })
     }
 
     pub fn symbols(&self) -> impl Iterator<Item = &SmolStr> + '_ {
@@ -725,6 +731,13 @@ pub(crate) enum SymbolSourceProto {
 }
 
 impl SymbolSourceProto {
+    pub(crate) fn into_path(self) -> Option<Arc<Path>> {
+        match self {
+            Self::Api => None,
+            Self::File { path } => Some(path),
+        }
+    }
+
     pub(crate) fn with_line(self, line: usize) -> SymbolSource {
         match self {
             Self::Api => SymbolSource::Api,

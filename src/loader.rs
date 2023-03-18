@@ -1,4 +1,7 @@
 
+use std::path::Path;
+use std::sync::Arc;
+
 use ramble::{Tree, Node, NodeLocation, Item, Span};
 use smol_str::SmolStr;
 
@@ -21,25 +24,34 @@ mod runtime;
 pub(crate) mod kw;
 pub(crate) mod mark;
 
-pub(crate) fn load_str<W>(
-    content: &str,
-    mut system: System<W>,
-    source: SymbolSourceProto,
-) -> Result<System<W>, LoadError>
+pub(crate) fn load_str_set<'a, W, I>(set: I, mut system: System<W>) -> Result<System<W>, LoadError>
 where
     W: World,
+    I: IntoIterator<Item = (&'a str, SymbolSourceProto)>,
 {
-    let tree = Tree::parse(content, mark::MARKS).map_err(LoadError::Tree)?;
-
+    let mut trees = Vec::new();
     let mut node_decls = Vec::new();
-    for node in &tree.nodes {
-        let decl = Declaration::extract(node)?;
-        let source = source.clone().with_line(node.location.line_index + 1);
-        let (name, info) = decl.symbol_info(source);
-        system.register_node_raw(name.clone(), info, Box::new(|_, _| {
-            panic!("loaded node was declared but not compiled in")
-        })).map_err(|error| CompileErrorKind::SystemSymbol(error).at(node))?;
-        node_decls.push((name, decl));
+
+    for (content, source) in set {
+        let tree = match Tree::parse(content, mark::MARKS) {
+            Ok(tree) => tree,
+            Err(error) => {
+                return Err(LoadError::Tree(error, source.into_path()));
+            },
+        };
+        trees.push((tree, source));
+    }
+
+    for (tree, source) in &trees {
+        for node in &tree.nodes {
+            let decl = Declaration::extract(node)?;
+            let source = source.clone().with_line(node.location.line_index + 1);
+            let (name, info) = decl.symbol_info(source);
+            system.register_node_raw(name.clone(), info, Box::new(|_, _| {
+                panic!("loaded node was declared but not compiled in")
+            })).map_err(|error| CompileErrorKind::SystemSymbol(error).at(node))?;
+            node_decls.push((name, decl));
+        }
     }
 
     for (name, decl) in node_decls {
@@ -55,7 +67,7 @@ where
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoadError {
-    Tree(ramble::ParseError),
+    Tree(ramble::ParseError, Option<Arc<Path>>),
     Compile(CompileError),
 }
 
