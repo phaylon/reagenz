@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use derivative::Derivative;
 
-use crate::value::Values;
+use crate::value::{Value, Values};
 
 use super::id_space::ActionIdx;
 
@@ -57,4 +57,18 @@ pub struct Action<Ext, Eff> {
     index: ActionIdx,
     arguments: Values<Ext>,
     effects: Arc<[Eff]>,
+}
+
+impl<Ext, Eff> Action<Ext, Eff> {
+    pub(super) fn index(&self) -> ActionIdx {
+        self.index
+    }
+
+    pub fn arguments(&self) -> &[Value<Ext>] {
+        &self.arguments
+    }
+
+    pub fn effects(&self) -> &[Eff] {
+        &self.effects
+    }
 }

@@ -9,6 +9,8 @@ pub mod id_space;
 pub mod script;
 pub mod builder;
 
+mod context;
+
 pub struct BehaviorTree<Ctx, Ext, Eff> {
     ids: IdSpace<Ctx, Ext, Eff>,
 }
