@@ -1,20 +1,20 @@
 
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
-use smallvec::SmallVec;
 use smol_str::SmolStr;
 
 use crate::value::Value;
 
 use super::{Index, IdMap, KindError, ArityError};
+use super::outcome::{Outcome};
 use super::script::{ActionRoot, NodeRoot};
 
 
-pub type QueryVec<Ext> = SmallVec<[Value<Ext>; 16]>;
-
 pub type GlobalFn<Ctx, Ext> = dyn Fn(&Ctx) -> Value<Ext>;
 pub type EffectFn<Ctx, Ext, Eff> = dyn Fn(&Ctx, &[Value<Ext>]) -> Option<Eff>;
-pub type QueryFn<Ctx, Ext> = dyn Fn(&Ctx, &[Value<Ext>]) -> QueryVec<Ext>;
+pub type QueryIterFn<Ext, Eff> = dyn FnMut(Value<Ext>) -> ControlFlow<Outcome<Ext, Eff>, ()>;
+pub type QueryFn<Ctx, Ext, Eff> = dyn Fn(&Ctx, &[Value<Ext>], &mut QueryIterFn<Ext, Eff>, bool) -> Outcome<Ext, Eff>;
 pub type CondFn<Ctx, Ext> = dyn Fn(&Ctx, &[Value<Ext>]) -> bool;
 
 macro_rules! generate {
@@ -57,26 +57,6 @@ macro_rules! generate {
                     &mut ids.$field
                 }
             }
-
-            /*
-            impl<Ctx, Ext, Eff> IdSpaceAccess<Ctx, Ext, Eff, $index> for IdSpace<Ctx, Ext, Eff> {
-                type Node = $node;
-
-                const KIND: Kind = Kind::$kind;
-
-                fn id_space(&self) -> &Self {
-                    self
-                }
-
-                fn id_map(&self) -> &IdMap<$node, $data> {
-                    &self.$field
-                }
-
-                fn id_map_mut(&mut self) -> &mut IdMap<$node, $data> {
-                    &mut self.$field
-                }
-            }
-            */
         )*
 
         #[flagnum::flag(#[derive(Default)] pub Kinds)]
@@ -121,7 +101,7 @@ generate! {
     globals: Global/GlobalIdx (Arc<GlobalFn<Ctx, Ext>>, usize) => "a global",
     effects: Effect/EffectIdx (Arc<EffectFn<Ctx, Ext, Eff>>, usize) => "an effect",
     conditions: Cond/CondIdx (Arc<CondFn<Ctx, Ext>>, usize) => "a condition",
-    queries: Query/QueryIdx (Arc<QueryFn<Ctx, Ext>>, usize) => "a query",
+    queries: Query/QueryIdx (Arc<QueryFn<Ctx, Ext, Eff>>, usize) => "a query",
     action_roots: Action/ActionIdx (Arc<ActionRoot<Ext>>, usize) => "an action",
     node_roots: Node/NodeIdx (Arc<NodeRoot<Ext>>, usize) => "a node",
 }
@@ -178,11 +158,6 @@ impl<Ctx, Ext, Eff> IdSpace<Ctx, Ext, Eff> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Signature {
-    arity: usize,
-}
-
 pub trait IdSpaceIndex<Ctx, Ext, Eff>: From<Index> + Into<Index> {
     type Node;
 
@@ -192,54 +167,6 @@ pub trait IdSpaceIndex<Ctx, Ext, Eff>: From<Index> + Into<Index> {
 
     fn id_map_mut(ids: &mut IdSpace<Ctx, Ext, Eff>) -> &mut IdMap<Self::Node, usize>;
 }
-
-/*
-pub trait IdSpaceAccess<Ctx, Ext, Eff, Idx>
-where
-    Idx: From<Index> + Into<Index>,
-{
-    type Node;
-
-    const KIND: Kind;
-
-    fn id_space(&self) -> &IdSpace<Ctx, Ext, Eff>;
-
-    fn id_map(&self) -> &IdMap<Self::Node, usize>;
-
-    fn id_map_mut(&mut self) -> &mut IdMap<Self::Node, usize>;
-
-    fn resolve(&self, name: &str, given: usize) -> Result<Idx, IdError> {
-        if let Some(index) = self.id_map().find(name) {
-            let expected = *self.id_map().data(index);
-            if given == expected {
-                Ok(index.into())
-            } else {
-                Err(IdError::Arity { given, expected })
-            }
-        } else if let Some(found) = self.id_space().kind(name) {
-            Err(IdError::Kind { required: Self::KIND, found })
-        } else {
-            Err(IdError::Unknown)
-        }
-    }
-
-    fn get(&self, index: Idx) -> &Self::Node {
-        self.id_map().node(index.into())
-    }
-
-    fn set(&mut self, name: SmolStr, node: Self::Node, arity: usize) -> Result<Idx, Kind> {
-        if let Some(kind) = self.id_space().kind(&name) {
-            Err(kind)
-        } else {
-            Ok(self.id_map_mut().set(name, node, arity).into())
-        }
-    }
-
-    fn set_node(&mut self, index: Idx, node: Self::Node) {
-        self.id_map_mut().set_node(index.into(), node);
-    }
-}
-*/
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IdError {

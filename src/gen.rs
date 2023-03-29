@@ -38,31 +38,6 @@ macro_rules! fn_enum_variant_try_into {
 
 pub(crate) use fn_enum_variant_try_into;
 
-macro_rules! enum_tag {
-    ($public:vis $name:ident {
-        $(
-            $variant:ident {
-                $is_variant:ident,
-                $as_variant:ident,
-                $try_into_variant:ident
-                $(,)?
-            }
-        ),*
-        $(,)?
-    }) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        $public enum $name<T> { $($variant(T)),* }
-
-        impl<T> $name<T> {
-            $(
-                $crate::gen::fn_enum_is_variant!($public $is_variant, $variant);
-            )*
-        }
-    };
-}
-
-pub(crate) use enum_tag;
-
 macro_rules! enum_class {
     ($public:vis $name:ident { $($variant:ident $( = $default:ty)?),* $(,)? }) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -72,6 +47,7 @@ macro_rules! enum_class {
             )*
         }
 
+        #[allow(unused)]
         impl<$($variant),*> $name<$($variant),*> {
             pub fn as_ref(&self) -> $name<$(& $variant),*> {
                 match self {
@@ -82,6 +58,7 @@ macro_rules! enum_class {
             }
         }
 
+        #[allow(unused)]
         impl<E, $($variant),*> $name<$(Result<$variant, E>),*> {
             pub fn lift(self) -> Result<$name<$($variant),*>, E> {
                 match self {
@@ -105,6 +82,7 @@ macro_rules! enum_class {
             }
         }
 
+        #[allow(unused)]
         impl<T> $name<$( $crate::gen::param_replace!(T, $variant) ),*> {
             pub fn map<F, X>(
                 self,
@@ -136,6 +114,7 @@ macro_rules! smol_str_wrapper {
         #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         $public struct $name(SmolStr);
 
+        #[allow(unused)]
         impl $name {
             $public fn to_smol_str(&self) -> SmolStr {
                 self.0.clone()

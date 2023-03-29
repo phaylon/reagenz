@@ -41,6 +41,16 @@ impl<Ext, Eff> Outcome<Ext, Eff> {
     }
 }
 
+impl<Ext, Eff> From<bool> for Outcome<Ext, Eff> {
+    fn from(value: bool) -> Self {
+        if value {
+            Self::Success
+        } else {
+            Self::Failure
+        }
+    }
+}
+
 #[derive(Derivative, Debug, PartialEq)]
 #[derivative(Clone(bound=""))]
 pub struct Action<Ext, Eff> {

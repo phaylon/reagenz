@@ -1,3 +1,4 @@
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -67,10 +68,18 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
     {
         let id = id.into();
         assert!(is_symbol(&id), "query id `{id}` is not a valid symbol");
-        let prev = self.ids.set::<QueryIdx>(id.clone(), Arc::new(move |ctx, args| {
-            S::try_from_values(args.iter().cloned())
-                .map(|args| handler(ctx, args).into_iter().collect())
-                .unwrap_or_default()
+        let prev = self.ids.set::<QueryIdx>(id.clone(), Arc::new(move |ctx, args, iter_fn, default| {
+            let iter = S::try_from_values(args.iter().cloned()).map(|args| handler(ctx, args));
+            if let Some(iter) = iter {
+                for value in iter {
+                    if let ControlFlow::Break(outcome) = iter_fn(value) {
+                        return outcome;
+                    }
+                }
+                default.into()
+            } else {
+                false.into()
+            }
         }), S::ARITY).err();
         if let Some(kind) = prev {
             panic!("query id `{id}` was already used for {kind}");
