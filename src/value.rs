@@ -1,122 +1,84 @@
 use std::sync::Arc;
 
-use derivative::Derivative;
-use ramble::{Item, Num, ItemKind, GroupKind};
-use smallvec::SmallVec;
 use smol_str::SmolStr;
-use num_traits::NumCast;
 
-use crate::World;
-use crate::loader::is_reserved_char;
+use crate::gen::{fn_enum_is_variant, fn_enum_variant_access, fn_enum_variant_try_into};
 
 
-pub type ValueIter<W> = dyn Iterator<Item = Value<W>>;
+pub type Values<Ext> = Arc<[Value<Ext>]>;
 
-pub type Args<T> = SmallVec<[T; 16]>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct ExtValue<T>(pub T);
 
-pub type List<T> = Arc<[T]>;
-
-#[derive(Derivative)]
-#[derivative(
-    Clone(bound=""),
-    Debug(bound="W::Value: std::fmt::Debug"),
-    PartialEq(bound="W::Value: PartialEq"),
-    PartialOrd="feature_allow_slow_enum",
-    PartialOrd(bound="W::Value: PartialOrd"),
-)]
-pub enum Value<W: World> {
-    Int(i64),
-    Float(f64),
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum Value<Ext> {
     Symbol(SmolStr),
-    Ext(W::Value),
-    List(List<Self>),
+    Int(i32),
+    Float(f32),
+    List(Values<Ext>),
+    Ext(Ext),
 }
 
-macro_rules! fn_access {
-    ($variant:ident, $access:ty, $pred:ident, $getter:ident, |$value:ident| $get:expr $(,)?) => {
-        pub fn $getter(&self) -> Option<$access> {
-            if let Self::$variant($value) = self {
-                Some($get)
-            } else {
-                None
-            }
-        }
+impl<Ext> Value<Ext> {
+    fn_enum_is_variant!(pub is_symbol, Symbol);
+    fn_enum_is_variant!(pub is_int, Int);
+    fn_enum_is_variant!(pub is_float, Float);
+    fn_enum_is_variant!(pub is_list, List);
+    fn_enum_is_variant!(pub is_ext, Ext);
 
-        pub fn $pred(&self) -> bool {
-            matches!(self, Self::$variant(_))
-        }
-    }
+    fn_enum_variant_access!(pub symbol -> &SmolStr, Self::Symbol(symbol) => symbol);
+    fn_enum_variant_access!(pub int -> i32, Self::Int(value) => *value);
+    fn_enum_variant_access!(pub float -> f32, Self::Float(value) => *value);
+    fn_enum_variant_access!(pub list -> &Values<Ext>, Self::List(list) => list);
+    fn_enum_variant_access!(pub ext -> &Ext, Self::Ext(ext) => ext);
+
+    fn_enum_variant_try_into!(pub try_into_symbol -> SmolStr, Self::Symbol(symbol) => symbol);
+    fn_enum_variant_try_into!(pub try_into_int -> i32, Self::Int(value) => value);
+    fn_enum_variant_try_into!(pub try_into_float -> f32, Self::Float(value) => value);
+    fn_enum_variant_try_into!(pub try_into_list -> Values<Ext>, Self::List(list) => list);
+    fn_enum_variant_try_into!(pub try_into_ext -> Ext, Self::Ext(ext) => ext);
 }
 
-macro_rules! fn_convert_num {
-    ($name:ident, $output:ty $(,)?) => {
-        pub fn $name(&self) -> Option<$output> {
-            match self {
-                Self::Int(i) => NumCast::from(*i),
-                Self::Float(f) => NumCast::from(*f),
-                _ => None,
-            }
-        }
-    }
-}
-
-impl<W> Value<W>
+impl<Ext, T> FromIterator<T> for Value<Ext>
 where
-    W: World,
+    T: Into<Self>,
 {
-    pub(crate) fn try_from_item(item: &Item) -> Option<Self> {
-        match item.kind {
-            ItemKind::Word(ref word) => Some(Self::Symbol(word.clone())),
-            ItemKind::Num(Num::Int(i)) => Some(Self::Int(i)),
-            ItemKind::Num(Num::Float(f)) => Some(Self::Float(f)),
-            ItemKind::Group(GroupKind::Brackets, ref items) => items.iter()
-                .map(Self::try_from_item)
-                .collect::<Option<Arc<[_]>>>()
-                .map(Self::List),
-            ItemKind::Punctuation(_) | ItemKind::Group(_, _) => None,
-        }
-    }
-
-    fn_access!(Ext, &W::Value, is_ext, ext, |ext| ext);
-    fn_access!(Symbol, &SmolStr, is_symbol, symbol, |sym| sym);
-    fn_access!(Int, i64, is_int, int, |i| *i);
-    fn_access!(Float, f64, is_float, float, |f| *f);
-    fn_access!(List, &[Self], is_list, list, |values| values);
-
-    fn_convert_num!(to_i64, i64);
-    fn_convert_num!(to_f64, f64);
-}
-
-impl<W, V> FromIterator<V> for Value<W>
-where
-    W: World,
-    V: Into<Self>,
-{
-    fn from_iter<T: IntoIterator<Item = V>>(iter: T) -> Self {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Self::List(iter.into_iter().map(Into::into).collect())
     }
 }
 
 macro_rules! impl_value_from {
-    ($source:ty, |$value:ident| $create:expr) => {
-        impl<W> From<$source> for Value<W> where W: World {
+    ($source:ty, |$value:ident| $body:expr $(,)?) => {
+        impl<Ext> From<$source> for Value<Ext> {
             fn from($value: $source) -> Self {
-                $create
+                $body
+            }
+        }
+    };
+    ($source:ty, $callback:path $(,)?) => {
+        impl<Ext> From<$source> for Value<Ext> {
+            fn from(value: $source) -> Self {
+                $callback(value)
             }
         }
     }
 }
 
-impl_value_from!(i64, |v| Self::Int(v));
-impl_value_from!(i32, |v| Self::Int(v.into()));
-impl_value_from!(f64, |v| Self::Float(v));
-impl_value_from!(f32, |v| Self::Float(v.into()));
-impl_value_from!(SmolStr, |v| Self::Symbol(v));
-impl_value_from!(&SmolStr, |v| Self::Symbol(v.clone()));
+impl_value_from!(SmolStr, Self::Symbol);
+impl_value_from!(&SmolStr, |value| Self::Symbol(value.clone()));
+impl_value_from!(&str, |value| Self::Symbol(value.into()));
+impl_value_from!(i32, Self::Int);
+impl_value_from!(f32, Self::Float);
 
-impl<W, T> From<Vec<T>> for Value<W>
+impl<Ext> From<ExtValue<Ext>> for Value<Ext> {
+    fn from(value: ExtValue<Ext>) -> Self {
+        Self::Ext(value.0)
+    }
+}
+
+impl<Ext, T> From<Vec<T>> for Value<Ext>
 where
-    W: World,
     T: Into<Self>,
 {
     fn from(values: Vec<T>) -> Self {
@@ -124,9 +86,8 @@ where
     }
 }
 
-impl<W, T, const N: usize> From<[T; N]> for Value<W>
+impl<Ext, T, const N: usize> From<[T; N]> for Value<Ext>
 where
-    W: World,
     T: Into<Self>,
 {
     fn from(values: [T; N]) -> Self {
@@ -134,95 +95,121 @@ where
     }
 }
 
-pub trait StrExt {
-    fn as_str(&self) -> &str;
+macro_rules! impl_value_try_into {
+    ($target:ty, $variant:pat => $body:expr) => {
+        impl<Ext> TryInto<$target> for Value<Ext> {
+            type Error = Self;
 
-    fn is_variable(&self) -> bool {
-        let string = self.as_str();
-        string.len() > 1
-        && string.starts_with('$')
-        && string[1..].is_symbol()
-    }
-
-    fn is_symbol(&self) -> bool {
-        let string = self.as_str();
-        !string.is_empty()
-        && string.chars().all(|c| !c.is_whitespace() && !is_reserved_char(c))
-    }
+            fn try_into(self) -> Result<$target, Self> {
+                if let $variant = self {
+                    Ok($body)
+                } else {
+                    Err(self)
+                }
+            }
+        }
+    };
 }
 
-impl StrExt for str {
-    fn as_str(&self) -> &str {
-        self
-    }
-}
+impl_value_try_into!(SmolStr, Self::Symbol(symbol) => symbol);
+impl_value_try_into!(i32, Self::Int(value) => value);
+impl_value_try_into!(f32, Self::Float(value) => value);
 
-impl StrExt for SmolStr {
-    fn as_str(&self) -> &str {
-        self
-    }
-}
+impl<Ext> TryInto<ExtValue<Ext>> for Value<Ext> {
+    type Error = Self;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn is_variable() {
-        for ok in [
-            "$a",
-            "$abc",
-            "$ab-cd",
-            "$*abcd*",
-            "$+",
-            "$@abc",
-            "$a.b.c",
-            "$a/b/c",
-        ] {
-            assert!(ok.is_variable(), "string {ok:?} should be a valid variable");
-        }
-
-        for fail in [
-            "",
-            "a",
-            "abc$",
-            "$abc$",
-            "$a b",
-            "$a;b",
-            "$a(b",
-            "$a:b",
-            "$a?b",
-        ] {
-            assert!(!fail.is_variable(), "string {fail:?} should not be a valid variable");
-        }
-    }
-
-    #[test]
-    fn is_symbol() {
-        for ok in [
-            "a",
-            "abc",
-            "ab-cd",
-            "*abcd*",
-            "+",
-            "@abc",
-            "a.b.c",
-            "a/b/c",
-        ] {
-            assert!(ok.is_symbol(), "string {ok:?} should be a valid symbol");
-        }
-
-        for fail in [
-            "",
-            "$abc",
-            "abc$",
-            "a b",
-            "a;b",
-            "a(b",
-            "a:b",
-            "a?b",
-        ] {
-            assert!(!fail.is_symbol(), "string {fail:?} should not be a valid symbol");
+    fn try_into(self) -> Result<ExtValue<Ext>, Self> {
+        if let Self::Ext(value) = self {
+            Ok(ExtValue(value))
+        } else {
+            Err(self)
         }
     }
 }
+
+impl<Ext, T> TryInto<Vec<T>> for Value<Ext>
+where
+    T: TryFrom<Self>,
+    Ext: Clone,
+{
+    type Error = Self;
+
+    fn try_into(self) -> Result<Vec<T>, Self::Error> {
+        if let Self::List(list) = &self {
+            if let Ok(values) = list.iter().cloned().map(TryInto::try_into).collect() {
+                return Ok(values);
+            }
+        }
+        Err(self)
+    }
+}
+
+pub trait TryFromValues<Ext>: Sized {
+    const ARITY: usize;
+
+    fn try_from_values<I>(values: I) -> Option<Self>
+    where
+        I: IntoIterator<Item = Value<Ext>>;
+}
+
+impl<Ext, T, const N: usize> TryFromValues<Ext> for [T; N]
+where
+    T: TryFrom<Value<Ext>>,
+{
+    const ARITY: usize = N;
+
+    fn try_from_values<I>(values: I) -> Option<Self>
+    where
+        I: IntoIterator<Item = Value<Ext>>,
+    {
+        let mut values = values.into_iter().fuse();
+        let values: [_; N] = std::array::from_fn(|_| {
+            values.next().and_then(|value| value.try_into().ok())
+        });
+        if values.iter().any(|value| value.is_none()) {
+            return None;
+        }
+        Some(values.map(|value| value.unwrap()))
+    }
+}
+
+macro_rules! impl_tuple_try_from_values_next {
+    () => {};
+    ($first:ident $($rest:ident)*) => {
+        impl_tuple_try_from_values!($($rest)*);
+    }
+}
+
+macro_rules! const_arity {
+    () => { 0 };
+    ($first:ident $($rest:ident)*) => {
+        1 + const_arity!($($rest)*)
+    }
+}
+
+macro_rules! impl_tuple_try_from_values {
+    ($( $param:ident )*) => {
+        impl<Ext, $($param),*> TryFromValues<Ext> for ($($param,)*)
+        where
+            $(
+                $param: TryFrom<Value<Ext>>,
+            )*
+        {
+            const ARITY: usize = const_arity!($($param)*);
+
+            fn try_from_values<I>(values: I) -> Option<Self>
+            where
+                I: IntoIterator<Item = Value<Ext>>,
+            {
+                #[allow(unused)]
+                let mut iter = values.into_iter();
+                Some(($(
+                    $param::try_from(iter.next()?).ok()?,
+                )*))
+            }
+        }
+        impl_tuple_try_from_values_next!($($param)*);
+    };
+}
+
+impl_tuple_try_from_values!(T15 T14 T13 T12 T11 T10 T9 T8 T7 T6 T5 T4 T3 T2 T1 T0);

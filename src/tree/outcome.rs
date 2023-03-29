@@ -1,0 +1,50 @@
+use std::sync::Arc;
+
+use derivative::Derivative;
+
+use crate::value::Values;
+
+use super::id_space::ActionIdx;
+
+
+#[derive(Derivative, Debug, PartialEq)]
+#[derivative(Clone(bound=""))]
+pub enum Outcome<Ext, Eff> {
+    Success,
+    Failure,
+    Action(Action<Ext, Eff>),
+}
+
+impl<Ext, Eff> Outcome<Ext, Eff> {
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success)
+    }
+
+    pub fn is_non_success(&self) -> bool {
+        !self.is_success()
+    }
+
+    pub fn is_failure(&self) -> bool {
+        matches!(self, Self::Failure)
+    }
+
+    pub fn is_non_failure(&self) -> bool {
+        !self.is_failure()
+    }
+
+    pub fn is_action(&self) -> bool {
+        matches!(self, Self::Action(_))
+    }
+
+    pub fn is_non_action(&self) -> bool {
+        !self.is_action()
+    }
+}
+
+#[derive(Derivative, Debug, PartialEq)]
+#[derivative(Clone(bound=""))]
+pub struct Action<Ext, Eff> {
+    index: ActionIdx,
+    arguments: Values<Ext>,
+    effects: Arc<[Eff]>,
+}
