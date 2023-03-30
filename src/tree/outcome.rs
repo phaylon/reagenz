@@ -39,6 +39,14 @@ impl<Ext, Eff> Outcome<Ext, Eff> {
     pub fn is_non_action(&self) -> bool {
         !self.is_action()
     }
+
+    pub fn effects(&self) -> Option<&[Eff]> {
+        if let Self::Action(action) = self {
+            Some(&action.effects)
+        } else {
+            None
+        }
+    }
 }
 
 impl<Ext, Eff> From<bool> for Outcome<Ext, Eff> {
@@ -60,6 +68,10 @@ pub struct Action<Ext, Eff> {
 }
 
 impl<Ext, Eff> Action<Ext, Eff> {
+    pub(super) fn new(index: ActionIdx, arguments: Values<Ext>, effects: Arc<[Eff]>) -> Self {
+        Self { index, arguments, effects }
+    }
+
     pub(super) fn index(&self) -> ActionIdx {
         self.index
     }

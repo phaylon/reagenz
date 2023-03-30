@@ -5,6 +5,7 @@ use derivative::Derivative;
 use smol_str::SmolStr;
 use treelang::Indent;
 
+use crate::Outcome;
 use crate::str::{is_variable, is_symbol};
 use crate::tree::id_space::{QueryIdx, CondIdx};
 use crate::value::{Value, TryFromValues};
@@ -68,17 +69,13 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
     {
         let id = id.into();
         assert!(is_symbol(&id), "query id `{id}` is not a valid symbol");
-        let prev = self.ids.set::<QueryIdx>(id.clone(), Arc::new(move |ctx, args, iter_fn, default| {
-            let iter = S::try_from_values(args.iter().cloned()).map(|args| handler(ctx, args));
-            if let Some(iter) = iter {
-                for value in iter {
-                    if let ControlFlow::Break(outcome) = iter_fn(value) {
-                        return outcome;
-                    }
-                }
-                default.into()
+        let prev = self.ids.set::<QueryIdx>(id.clone(), Arc::new(move |ctx, args, iter_fn| {
+            if let Some(args) = S::try_from_values(args.iter().cloned()) {
+                let iter = handler.run(ctx, args);
+                let mut iter = iter.into_iter();
+                iter_fn(&mut iter)
             } else {
-                false.into()
+                Outcome::Failure
             }
         }), S::ARITY).err();
         if let Some(kind) = prev {
@@ -120,5 +117,24 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
         }
         let compiled_ids = compiler.compile()?;
         Ok(BehaviorTree { ids: compiled_ids })
+    }
+}
+
+pub trait QueryCallback<'ctx, S, Ctx, Ext> {
+    type Iter: IntoIterator<Item = Value<Ext>> + 'ctx;
+
+    fn run(&self, ctx: &'ctx Ctx, args: S) -> Self::Iter;
+}
+
+impl<'ctx, F, I, S, Ctx, Ext> QueryCallback<'ctx, S, Ctx, Ext> for F
+where
+    F: Fn(&'ctx Ctx, S) -> I + 'static,
+    I: IntoIterator<Item = Value<Ext>> + 'ctx,
+    Ctx: 'ctx,
+{
+    type Iter = I;
+
+    fn run(&self, ctx: &'ctx Ctx, args: S) -> Self::Iter {
+        self(ctx, args)
     }
 }

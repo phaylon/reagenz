@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use treelang::{Node as ScriptNode, Item, ItemKind};
 
-use crate::tree::{KindError, ArityError};
+use crate::tree::{KindError, ArityError, ActionIdx, NodeIdx};
 use crate::tree::id_space::{IdSpace, IdError, Kind, EffectIdx};
 use crate::tree::script::{
     NodeRoot, ActionRoot, Node, Nodes, Dispatch, RefMode, Ref, Patterns, Pattern, ProtoValues,
@@ -23,15 +23,17 @@ mod env;
 
 pub(super) fn compile_root_declaration<Ctx, Ext, Eff>(
     ids: &IdSpace<Ctx, Ext, Eff>,
-    decl: Root<&Decl>,
+    decl: &Decl,
+    index: Root<NodeIdx, ActionIdx>,
 ) -> CompileResult<Root<NodeRoot<Ext>, ActionRoot<Ext>>> {
-    decl.map_each(
-        |decl| compile_node_root(ids, &decl.parameters, decl.node.children()),
-        |decl| compile_action_root(ids, &decl.parameters, decl.node.children()),
+    index.map_each(
+        |index| compile_node_root(index, ids, &decl.parameters, decl.node.children()),
+        |index| compile_action_root(index, ids, &decl.parameters, decl.node.children()),
     ).lift()
 }
 
 fn compile_node_root<Ctx, Ext, Eff>(
+    index: NodeIdx,
     ids: &IdSpace<Ctx, Ext, Eff>,
     parameters: &[ItemValue<Var>],
     children: &[ScriptNode],
@@ -41,11 +43,12 @@ fn compile_node_root<Ctx, Ext, Eff>(
     env.scope(parameters.iter(), |env| {
         let nodes = compile_branches(env, children)?;
         let lexicals = env.max_vars();
-        Ok(NodeRoot { node: Node::sequence(nodes), lexicals })
+        Ok(NodeRoot { index: Some(index), node: Node::sequence(nodes), lexicals })
     })
 }
 
 fn compile_action_root<Ctx, Ext, Eff>(
+    index: ActionIdx,
     ids: &IdSpace<Ctx, Ext, Eff>,
     parameters: &[ItemValue<Var>],
     children: &[ScriptNode],
@@ -69,13 +72,13 @@ fn compile_action_root<Ctx, Ext, Eff>(
     }
 
     let mut env = Env::new(ids);
-    let discovery = compile_node_root(ids, &[], &discovery)?;
+    let discovery = compile_branches(&mut env, &discovery)?;
 
     env.scope(parameters.iter(), |env| {
         let conditions = compile_branches(env, &conditions)?;
         let effects = compile_effects(env, &effects)?;
         let lexicals = env.max_vars();
-        Ok(ActionRoot { effects, conditions, discovery, lexicals })
+        Ok(ActionRoot { index: Some(index), effects, conditions, discovery, lexicals })
     })
 }
 

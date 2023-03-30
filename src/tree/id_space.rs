@@ -10,11 +10,16 @@ use super::{Index, IdMap, KindError, ArityError};
 use super::outcome::{Outcome};
 use super::script::{ActionRoot, NodeRoot};
 
+pub type QueryFn<Ctx, Ext, Eff> = dyn for<'ctx, 'args, 'iter_fn> Fn(
+    &'ctx Ctx,
+    &'args [Value<Ext>],
+    &'iter_fn mut dyn for<'iter> FnMut(
+        &'iter mut dyn Iterator<Item = Value<Ext>>,
+    ) -> Outcome<Ext, Eff>,
+) -> Outcome<Ext, Eff>;
 
 pub type GlobalFn<Ctx, Ext> = dyn Fn(&Ctx) -> Value<Ext>;
 pub type EffectFn<Ctx, Ext, Eff> = dyn Fn(&Ctx, &[Value<Ext>]) -> Option<Eff>;
-pub type QueryIterFn<Ext, Eff> = dyn FnMut(Value<Ext>) -> ControlFlow<Outcome<Ext, Eff>, ()>;
-pub type QueryFn<Ctx, Ext, Eff> = dyn Fn(&Ctx, &[Value<Ext>], &mut QueryIterFn<Ext, Eff>, bool) -> Outcome<Ext, Eff>;
 pub type CondFn<Ctx, Ext> = dyn Fn(&Ctx, &[Value<Ext>]) -> bool;
 
 macro_rules! generate {

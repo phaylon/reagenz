@@ -49,6 +49,17 @@ macro_rules! enum_class {
 
         #[allow(unused)]
         impl<$($variant),*> $name<$($variant),*> {
+            pub fn to_value<T>(
+                &self,
+                value: T,
+            ) -> $name<$($crate::gen::param_replace!(T, $variant)),*> {
+                match self {
+                    $(
+                        Self::$variant(_) => $name::$variant(value),
+                    )*
+                }
+            }
+
             pub fn as_ref(&self) -> $name<$(& $variant),*> {
                 match self {
                     $(
@@ -70,6 +81,18 @@ macro_rules! enum_class {
             }
         }
 
+        #[allow(unused)]
+        impl<$($variant),*> $name<$(Option<$variant>),*> {
+            pub fn lift(self) -> Option<$name<$($variant),*>> {
+                match self {
+                    $(
+                        Self::$variant(Some(value)) => Some($name::$variant(value)),
+                        Self::$variant(None) => None,
+                    )*
+                }
+            }
+        }
+
         impl<T> std::ops::Deref for $name<$( $crate::gen::param_replace!(T, $variant) ),*> {
             type Target = T;
 
@@ -84,6 +107,14 @@ macro_rules! enum_class {
 
         #[allow(unused)]
         impl<T> $name<$( $crate::gen::param_replace!(T, $variant) ),*> {
+            pub fn into_inner(self) -> T {
+                match self {
+                    $(
+                        Self::$variant(value) => value,
+                    )*
+                }
+            }
+
             pub fn map<F, X>(
                 self,
                 mapv: F,

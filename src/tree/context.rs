@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 
 use derivative::Derivative;
@@ -6,14 +7,24 @@ use super::{BehaviorTree, ActionIdx};
 use super::outcome::{Action, Outcome};
 
 
-pub trait Context<Ctx, Ext, Eff>: Sized {
+pub trait Context<Ctx, Ext, Eff>: Sized + Clone {
     fn view(&self) -> &Ctx;
 
     fn tree(&self) -> &BehaviorTree<Ctx, Ext, Eff>;
 
     fn to_inactive(&self) -> Self;
 
+    fn is_active(&self) -> bool;
+
     fn action(&self, action: Action<Ext, Eff>) -> Outcome<Ext, Eff>;
+
+    fn to_inactive_if_active(&self) -> Cow<'_, Self> {
+        if self.is_active() {
+            Cow::Owned(self.to_inactive())
+        } else {
+            Cow::Borrowed(self)
+        }
+    }
 }
 
 #[derive(Derivative)]
@@ -37,6 +48,10 @@ impl<'a, Ctx, Ext, Eff> Context<Ctx, Ext, Eff> for EvalContext<'a, Ctx, Ext, Eff
 
     fn tree(&self) -> &BehaviorTree<Ctx, Ext, Eff> {
         self.tree
+    }
+
+    fn is_active(&self) -> bool {
+        self.is_active
     }
 
     fn to_inactive(&self) -> Self {
@@ -90,6 +105,10 @@ where
 
     fn to_inactive(&self) -> Self {
         self.clone()
+    }
+
+    fn is_active(&self) -> bool {
+        false
     }
 
     fn action(&self, action: Action<Ext, Eff>) -> Outcome<Ext, Eff> {

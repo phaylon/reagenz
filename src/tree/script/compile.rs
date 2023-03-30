@@ -30,7 +30,13 @@ pub struct Compiler<'a, Ctx, Ext, Eff> {
     contents: Vec<Cow<'a, str>>,
     action_root_placeholder: Arc<ActionRoot<Ext>>,
     node_root_placeholder: Arc<NodeRoot<Ext>>,
-    declarations: HashMap<SmolStr, Root<(Decl, Index, usize)>>,
+    declarations: HashMap<SmolStr, Registered>,
+}
+
+struct Registered {
+    index: Root<NodeIdx, ActionIdx>,
+    decl: Decl,
+    src_index: usize,
 }
 
 impl<'a, Ctx, Ext, Eff> Compiler<'a, Ctx, Ext, Eff> {
@@ -51,23 +57,22 @@ impl<'a, Ctx, Ext, Eff> Compiler<'a, Ctx, Ext, Eff> {
             .map_err(|kind| kind.into_script_error(self.source(src_index)))?;
         let name = decl.name.value.to_smol_str();
         let arity = decl.parameters.len();
-        let prepared = (match decl {
-            Root::Node(decl) => {
+        let index = decl.as_ref()
+            .map_node(|_| {
                 let placeholder = self.node_root_placeholder.clone();
-                match self.ids.set::<NodeIdx>(name.clone(), placeholder, arity) {
-                    Ok(index) => Ok(Root::Node((decl, index.into(), src_index))),
-                    Err(_) => Err(Root::Node(decl)),
-                }
-            },
-            Root::Action(decl) => {
+                self.ids.set::<NodeIdx>(name.clone(), placeholder, arity)
+            })
+            .map_action(|_| {
                 let placeholder = self.action_root_placeholder.clone();
-                match self.ids.set::<ActionIdx>(name.clone(), placeholder, arity) {
-                    Ok(index) => Ok(Root::Action((decl, index.into(), src_index))),
-                    Err(_) => Err(Root::Action(decl)),
-                }
-            },
-        }).map_err(|decl| self.analyze_conflict(src_index, &decl))?;
-        self.declarations.insert(name, prepared);
+                self.ids.set::<ActionIdx>(name.clone(), placeholder, arity)
+            })
+            .lift()
+            .map_err(|_| self.analyze_conflict(src_index, &decl))?;
+        self.declarations.insert(name, Registered {
+            index,
+            decl: decl.into_inner(),
+            src_index,
+        });
         Ok(())
     }
 
@@ -82,10 +87,8 @@ impl<'a, Ctx, Ext, Eff> Compiler<'a, Ctx, Ext, Eff> {
     fn find_conflict_cause(&self, curr_src_index: usize, name: &SmolStr) -> ConflictErrorCause {
         let kind = self.ids.kind(name).unwrap();
         if let Some(decl) = self.declarations.get(name) {
-            let orig_src_index = decl.2;
-            let decl = &decl.0;
-            let context = self.offset_context(orig_src_index, decl.node.location);
-            if orig_src_index == curr_src_index {
+            let context = self.offset_context(decl.src_index, decl.decl.node.location);
+            if decl.src_index == curr_src_index {
                 ConflictErrorCause::SameSource(kind, context)
             } else {
                 ConflictErrorCause::DifferentSource(kind, context)
@@ -149,16 +152,12 @@ impl<'a, Ctx, Ext, Eff> Compiler<'a, Ctx, Ext, Eff> {
     }
 
     pub fn compile(mut self) -> ScriptResult<IdSpace<Ctx, Ext, Eff>> {
-        for (_, decl) in std::mem::replace(&mut self.declarations, HashMap::default()) {
-            let (decl, index, src_index) = match decl {
-                Root::Node((decl, index, src_index)) => (Root::Node(decl), index, src_index),
-                Root::Action((decl, index, src_index)) => (Root::Action(decl), index, src_index),
-            };
-            let compiled = compile_root_declaration(&self.ids, decl.as_ref())
-                .map_err(|kind| kind.into_script_error(self.source(src_index)))?;
+        for (_, reg_decl) in std::mem::replace(&mut self.declarations, HashMap::default()) {
+            let compiled = compile_root_declaration(&self.ids, &reg_decl.decl, reg_decl.index)
+                .map_err(|kind| kind.into_script_error(self.source(reg_decl.src_index)))?;
             match compiled {
-                Root::Node(root) => self.ids.set_node::<NodeIdx>(index.into(), Arc::new(root)),
-                Root::Action(root) => self.ids.set_node::<ActionIdx>(index.into(), Arc::new(root)),
+                Root::Node(root) => self.ids.set_node(root.index.unwrap(), Arc::new(root)),
+                Root::Action(root) => self.ids.set_node(root.index.unwrap(), Arc::new(root)),
             }
         }
         Ok(self.ids)
@@ -181,6 +180,42 @@ impl<Node, Action> Root<Node, Action> {
         match self {
             Self::Node(_) => Kind::Node,
             Self::Action(_) => Kind::Action,
+        }
+    }
+
+    fn try_into_node(self) -> Result<Node, Self> {
+        if let Self::Node(value) = self {
+            Ok(value)
+        } else {
+            Err(self)
+        }
+    }
+
+    fn try_into_action(self) -> Result<Action, Self> {
+        if let Self::Action(value) = self {
+            Ok(value)
+        } else {
+            Err(self)
+        }
+    }
+
+    fn map_node<F, T>(self, mapv: F) -> Root<T, Action>
+    where
+        F: FnOnce(Node) -> T,
+    {
+        match self {
+            Self::Node(node) => Root::Node(mapv(node)),
+            Self::Action(action) => Root::Action(action),
+        }
+    }
+
+    fn map_action<F, T>(self, mapv: F) -> Root<Node, T>
+    where
+        F: FnOnce(Action) -> T,
+    {
+        match self {
+            Self::Node(node) => Root::Node(node),
+            Self::Action(action) => Root::Action(mapv(action)),
         }
     }
 
