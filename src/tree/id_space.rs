@@ -1,5 +1,4 @@
 
-use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use smol_str::SmolStr;
@@ -119,6 +118,35 @@ impl<Ctx, Ext, Eff> IdSpace<Ctx, Ext, Eff> {
         Idx::id_map(self).find(name).is_some()
     }
 
+    pub fn resolve_ref(&self, name: &str, given: usize) -> Result<RefIdx, IdError> {
+        match self.kind(name) {
+            Some(kind) => match kind {
+                Kind::Action => self.resolve(name, given).map(RefIdx::Action),
+                Kind::Node => self.resolve(name, given).map(RefIdx::Node),
+                Kind::Cond => self.resolve(name, given).map(RefIdx::Cond),
+                other => Err(IdError::Kind(KindError {
+                    expected: [Kind::Action, Kind::Node, Kind::Cond].into(),
+                    given: other,
+                })),
+            },
+            None => Err(IdError::Unknown),
+        }
+    }
+
+    pub fn actions(&self) -> impl Iterator<Item = ActionIdx> {
+        self.action_roots.indices().map(Into::into)
+    }
+
+    pub fn action(&self, name: &str) -> Result<ActionIdx, IdError> {
+        if let Some(index) = ActionIdx::id_map(self).find(name) {
+            Ok(index.into())
+        } else if let Some(given) = self.kind(name) {
+            Err(IdError::Kind(KindError { expected: Kind::Action.into(), given }))
+        } else {
+            Err(IdError::Unknown)
+        }
+    }
+
     pub fn resolve<Idx>(&self, name: &str, given: usize) -> Result<Idx, IdError>
     where
         Idx: IdSpaceIndex<Ctx, Ext, Eff>,
@@ -161,6 +189,13 @@ impl<Ctx, Ext, Eff> IdSpace<Ctx, Ext, Eff> {
     {
         Idx::id_map_mut(self).set_node(index.into(), node);
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefIdx {
+    Action(ActionIdx),
+    Node(NodeIdx),
+    Cond(CondIdx),
 }
 
 pub trait IdSpaceIndex<Ctx, Ext, Eff>: From<Index> + Into<Index> {

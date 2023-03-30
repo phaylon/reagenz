@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use treelang::{Node as ScriptNode, Item, ItemKind};
 
-use crate::tree::{KindError, ArityError, ActionIdx, NodeIdx};
-use crate::tree::id_space::{IdSpace, IdError, Kind, EffectIdx};
+use crate::tree::{ArityError, ActionIdx, NodeIdx, RefIdx};
+use crate::tree::id_space::{IdSpace, IdError, EffectIdx};
 use crate::tree::script::{
-    NodeRoot, ActionRoot, Node, Nodes, Dispatch, RefMode, Ref, Patterns, Pattern, ProtoValues,
+    NodeRoot, ActionRoot, Node, Nodes, Dispatch, RefMode, Patterns, Pattern, ProtoValues,
     ProtoValue, QueryMode,
 };
 use crate::value::Value;
@@ -153,25 +153,8 @@ fn resolve_ref_symbol<Ctx, Ext, Eff>(
     env: &Env<'_, Ctx, Ext, Eff>,
     name: &ItemValue<Sym>,
     arity: usize,
-) -> CompileResult<Ref> {
-    match env.ids().kind(name.as_str()) {
-        Some(kind) => match kind {
-            Kind::Cond => env.ids().resolve(name, arity)
-                .map(Ref::Cond)
-                .map_err(|error| convert_id_error(name, error)),
-            Kind::Node => env.ids().resolve(name, arity)
-                .map(Ref::Node)
-                .map_err(|error| convert_id_error(name, error)),
-            Kind::Action => env.ids().resolve(name, arity)
-                .map(Ref::Action)
-                .map_err(|error| convert_id_error(name, error)),
-            other => Err(convert_id_error(name, IdError::Kind(KindError {
-                expected: [Kind::Cond, Kind::Node, Kind::Action].into(),
-                given: other,
-            }))),
-        },
-        None => Err(convert_id_error(name, IdError::Unknown)),
-    }
+) -> CompileResult<RefIdx> {
+    env.ids().resolve_ref(name.as_str(), arity).map_err(|error| convert_id_error(name, error))
 }
 
 fn try_compile_branch_ref<Ctx, Ext, Eff>(

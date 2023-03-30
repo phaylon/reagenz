@@ -1,12 +1,12 @@
 use std::borrow::Cow;
-use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use smallvec::SmallVec;
 
+use crate::tree::RefIdx;
 use crate::{Outcome, Action};
 use crate::tree::context::Context;
-use crate::tree::id_space::{EffectIdx, GlobalIdx, QueryIdx, CondIdx, ActionIdx, NodeIdx};
+use crate::tree::id_space::{EffectIdx, GlobalIdx, QueryIdx, ActionIdx, NodeIdx};
 use crate::value::Value;
 
 
@@ -31,7 +31,17 @@ impl<Ext> ActionRoot<Ext>
 where
     Ext: Clone + PartialEq,
 {
-    fn eval<C, Ctx, Eff>(
+    pub fn eval_discovery_nodes<C, Ctx, Eff>(&self, ctx: &C)
+    where
+        C: Context<Ctx, Ext, Eff>,
+    {
+        let mut lex = Lex::with_capacity(self.lexicals);
+        for node in self.discovery.iter() {
+            node.eval(ctx, &mut lex);
+        }
+    }
+
+    pub fn eval<C, Ctx, Eff>(
         &self,
         ctx: &C,
         arguments: &[Value<Ext>],
@@ -69,7 +79,7 @@ where
         C: Context<Ctx, Ext, Eff>,
     {
         let ctx = ctx.to_inactive_if_active();
-        Dispatch::Sequence.eval_branches(ctx.as_ref(), lex, &self.conditions).is_success()
+        eval_sequence(ctx.as_ref(), lex, &self.conditions).is_success()
     }
 }
 
@@ -96,7 +106,7 @@ impl<Ext> NodeRoot<Ext>
 where
     Ext: Clone + PartialEq,
 {
-    fn eval<C, Ctx, Eff>(
+    pub fn eval<C, Ctx, Eff>(
         &self,
         ctx: &C,
         arguments: &[Value<Ext>],
@@ -160,7 +170,7 @@ where
 pub enum Node<Ext> {
     Failure,
     Dispatch(Dispatch, Nodes<Ext>),
-    Ref(Ref, RefMode, ProtoValues<Ext>),
+    Ref(RefIdx, RefMode, ProtoValues<Ext>),
     Query(Pattern<Ext>, QueryIdx, ProtoValues<Ext>, QueryMode, Nodes<Ext>),
     Match(ProtoValues<Ext>, Patterns<Ext>, Nodes<Ext>),
 }
@@ -178,7 +188,7 @@ impl<Ext> Node<Ext> {
             },
             Self::Ref(ref_kind, mode, arguments) => {
                 let arguments: Args<Ext> = reify_values(ctx, lex, arguments.iter());
-                ref_kind.eval(ctx, lex, *mode, &arguments)
+                ref_kind.eval(ctx, *mode, &arguments)
             },
             Self::Match(values, patterns, branches) => {
                 let values: Args<Ext> = reify_values(ctx, lex, values.iter());
@@ -188,7 +198,7 @@ impl<Ext> Node<Ext> {
                     .zip(values.iter())
                     .all(|(p, v)| p.try_apply(ctx, &mut lex, v));
                 if is_matched {
-                    Dispatch::Sequence.eval_branches(ctx, &mut lex, branches)
+                    eval_sequence(ctx, &mut lex, branches)
                 } else {
                     Outcome::Failure
                 }
@@ -203,32 +213,12 @@ impl<Ext> Node<Ext> {
     pub fn sequence(nodes: Nodes<Ext>) -> Self {
         Self::Dispatch(Dispatch::Sequence, nodes)
     }
-
-    pub fn selection(nodes: Nodes<Ext>) -> Self {
-        Self::Dispatch(Dispatch::Selection, nodes)
-    }
-
-    pub fn none(nodes: Nodes<Ext>) -> Self {
-        Self::Dispatch(Dispatch::None, nodes)
-    }
-
-    pub fn visit(nodes: Nodes<Ext>) -> Self {
-        Self::Dispatch(Dispatch::Visit, nodes)
-    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Ref {
-    Action(ActionIdx),
-    Cond(CondIdx),
-    Node(NodeIdx),
-}
-
-impl Ref {
+impl RefIdx {
     fn eval<C, Ctx, Ext, Eff>(
         &self,
         ctx: &C,
-        lex: &mut Lex<Ext>,
         mode: RefMode,
         arguments: &[Value<Ext>],
     ) -> Outcome<Ext, Eff>

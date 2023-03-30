@@ -5,7 +5,7 @@ mod value;
 mod tree;
 
 pub use self::{
-    value::{ExtValue, Value, Values, TryFromValues},
+    value::{ExtValue, Value, Values, IntoValues, TryFromValues},
     str::{is_symbol, is_variable},
     tree::{
         BehaviorTree,

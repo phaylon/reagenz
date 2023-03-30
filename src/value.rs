@@ -144,6 +144,66 @@ where
     }
 }
 
+pub trait IntoValues<Ext>: Sized {
+    fn into_values<C>(self) -> C
+    where
+        C: FromIterator<Value<Ext>>;
+}
+
+impl<Ext, T, const N: usize> IntoValues<Ext> for [T; N]
+where
+    T: Into<Value<Ext>>,
+{
+    fn into_values<C>(self) -> C
+    where
+        C: FromIterator<Value<Ext>>,
+    {
+        self.into_iter().map(Into::into).collect()
+    }
+}
+
+impl<Ext, T> IntoValues<Ext> for Vec<T>
+where
+    T: Into<Value<Ext>>,
+{
+    fn into_values<C>(self) -> C
+    where
+        C: FromIterator<Value<Ext>>,
+    {
+        self.into_iter().map(Into::into).collect()
+    }
+}
+
+macro_rules! impl_tuple_into_values_next {
+    () => {};
+    ($first:ident $($rest:ident)*) => {
+        impl_tuple_into_values!($($rest)*);
+    }
+}
+
+macro_rules! impl_tuple_into_values {
+    ($( $param:ident )*) => {
+        impl<Ext, $($param),*> IntoValues<Ext> for ($($param,)*)
+        where
+            $(
+                $param: Into<Value<Ext>>,
+            )*
+        {
+            fn into_values<C>(self) -> C
+            where
+                C: FromIterator<Value<Ext>>,
+            {
+                #[allow(non_snake_case)]
+                let ($($param,)*) = self;
+                [$($param.into()),*].into_iter().collect()
+            }
+        }
+        impl_tuple_into_values_next!($($param)*);
+    }
+}
+
+impl_tuple_into_values!(T15 T14 T13 T12 T11 T10 T9 T8 T7 T6 T5 T4 T3 T2 T1 T0);
+
 pub trait TryFromValues<Ext>: Sized {
     const ARITY: usize;
 

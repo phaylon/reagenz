@@ -1,8 +1,6 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 
-use derivative::Derivative;
-
 use super::{BehaviorTree, ActionIdx};
 use super::outcome::{Action, Outcome};
 
@@ -27,12 +25,20 @@ pub trait Context<Ctx, Ext, Eff>: Sized + Clone {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone(bound=""))]
 pub struct EvalContext<'a, Ctx, Ext, Eff> {
     view: &'a Ctx,
     tree: &'a BehaviorTree<Ctx, Ext, Eff>,
     is_active: bool,
+}
+
+impl<'a, Ctx, Ext, Eff> Clone for EvalContext<'a, Ctx, Ext, Eff> {
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view,
+            tree: self.tree,
+            is_active: self.is_active,
+        }
+    }
 }
 
 impl<'a, Ctx, Ext, Eff> EvalContext<'a, Ctx, Ext, Eff> {
@@ -71,27 +77,37 @@ impl<'a, Ctx, Ext, Eff> Context<Ctx, Ext, Eff> for EvalContext<'a, Ctx, Ext, Eff
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone(bound=""))]
-pub struct DiscoveryContext<'a, Ctx, Ext, Eff, C> {
-    view: &'a Ctx,
-    tree: &'a BehaviorTree<Ctx, Ext, Eff>,
-    collection: &'a RefCell<C>,
+pub struct DiscoveryContext<'ctx, 'coll, Ctx, Ext, Eff, C> {
+    view: &'ctx Ctx,
+    tree: &'ctx BehaviorTree<Ctx, Ext, Eff>,
+    collection: &'ctx RefCell<&'coll mut C>,
     index: ActionIdx,
 }
 
-impl<'a, Ctx, Ext, Eff, C> DiscoveryContext<'a, Ctx, Ext, Eff, C> {
+impl<'ctx, 'coll, Ctx, Ext, Eff, C> Clone for DiscoveryContext<'ctx, 'coll, Ctx, Ext, Eff, C> {
+    fn clone(&self) -> Self {
+        Self {
+            view: self.view,
+            tree: self.tree,
+            collection: self.collection,
+            index: self.index,
+        }
+    }
+}
+
+impl<'ctx, 'coll, Ctx, Ext, Eff, C> DiscoveryContext<'ctx, 'coll, Ctx, Ext, Eff, C> {
     pub fn new(
-        view: &'a Ctx,
-        tree: &'a BehaviorTree<Ctx, Ext, Eff>,
-        collection: &'a RefCell<C>,
+        view: &'ctx Ctx,
+        tree: &'ctx BehaviorTree<Ctx, Ext, Eff>,
+        collection: &'ctx RefCell<&'coll mut C>,
         index: ActionIdx,
     ) -> Self {
         Self { view, tree, collection, index }
     }
 }
 
-impl<'a, Ctx, Ext, Eff, C> Context<Ctx, Ext, Eff> for DiscoveryContext<'a, Ctx, Ext, Eff, C>
+impl<'ctx, 'coll, Ctx, Ext, Eff, C> Context<Ctx, Ext, Eff>
+for DiscoveryContext<'ctx, 'coll, Ctx, Ext, Eff, C>
 where
     C: Extend<Action<Ext, Eff>>,
 {

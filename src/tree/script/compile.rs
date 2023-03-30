@@ -8,7 +8,6 @@ use walkdir::WalkDir;
 
 use crate::gen::enum_class;
 use crate::tree::ArityError;
-use crate::tree::id_map::Index;
 use crate::tree::id_space::{IdSpace, Kind, NodeIdx, ActionIdx, IdError};
 use crate::tree::script::ScriptError;
 
@@ -180,22 +179,6 @@ impl<Node, Action> Root<Node, Action> {
         match self {
             Self::Node(_) => Kind::Node,
             Self::Action(_) => Kind::Action,
-        }
-    }
-
-    fn try_into_node(self) -> Result<Node, Self> {
-        if let Self::Node(value) = self {
-            Ok(value)
-        } else {
-            Err(self)
-        }
-    }
-
-    fn try_into_action(self) -> Result<Action, Self> {
-        if let Self::Action(value) = self {
-            Ok(value)
-        } else {
-            Err(self)
         }
     }
 

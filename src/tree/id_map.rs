@@ -30,6 +30,10 @@ impl<N, D> IdMap<N, D> {
         }
     }
 
+    pub fn indices(&self) -> impl Iterator<Item = Index> {
+        (0..self.nodes.len()).into_iter().map(Index)
+    }
+
     pub fn find(&self, id: &str) -> Option<Index> {
         self.indices.get(id).copied()
     }
