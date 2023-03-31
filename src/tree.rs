@@ -29,7 +29,7 @@ impl<Ctx, Ext, Eff> BehaviorTree<Ctx, Ext, Eff>
 where
     Ext: Clone + PartialEq,
 {
-    pub fn evaluate<A, T>(
+    pub fn evaluate<A>(
         &self,
         view: &Ctx,
         root: &str,

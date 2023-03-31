@@ -64,7 +64,7 @@ fn compile_action_root<Ctx, Ext, Eff>(
             (kw::def::action::DISCOVERY, &mut discovery),
         ] {
             if try_parse_label_directive(child, keyword)? {
-                collection.push(child.clone());
+                collection.extend(child.children().iter().cloned());
                 continue 'children;
             }
         }

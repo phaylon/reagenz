@@ -19,9 +19,9 @@ pub mod dir {
 
     pub mod query {
         pub const SELECT: &str = "for-any";
-        pub const SEQUENCE: &str = "for-all";
+        pub const SEQUENCE: &str = "for-every";
         pub const FIRST: &str = "with-first";
         pub const LAST: &str = "with-last";
-        pub const VISIT: &str = "visit-all";
+        pub const VISIT: &str = "visit-every";
     }
 }

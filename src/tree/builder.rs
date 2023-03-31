@@ -58,20 +58,21 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
     }
 
     #[track_caller]
-    pub fn register_query<N, F, S, I>(&mut self, id: N, handler: F)
+    pub fn register_query<N, S, T, F, I>(&mut self, id: N, handler: F)
     where
         N: Into<SmolStr>,
         F: Fn(&Ctx, S) -> I + 'static,
-        I: IntoIterator<Item = Value<Ext>>,
+        I: IntoIterator<Item = T>,
         S: TryFromValues<Ext>,
+        T: Into<Value<Ext>>,
         Ext: Clone,
     {
         let id = id.into();
         assert!(is_symbol(&id), "query id `{id}` is not a valid symbol");
         let prev = self.ids.set::<QueryIdx>(id.clone(), Arc::new(move |ctx, args, iter_fn| {
             if let Some(args) = S::try_from_values(args.iter().cloned()) {
-                let iter = handler.run(ctx, args);
-                let mut iter = iter.into_iter();
+                let iter = handler(ctx, args);
+                let mut iter = iter.into_iter().map(Into::into);
                 iter_fn(&mut iter)
             } else {
                 Outcome::Failure
@@ -102,6 +103,17 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
         }
     }
 
+    pub fn compile_str(
+        self,
+        indent: Indent,
+        name: &str,
+        content: &str,
+    ) -> ScriptResult<BehaviorTree<Ctx, Ext, Eff>> {
+        self.compile(indent, [
+            ScriptSource::Str { name, content },
+        ])
+    }
+
     pub fn compile<'a, T>(
         self,
         indent: Indent,
@@ -116,24 +128,5 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
         }
         let compiled_ids = compiler.compile()?;
         Ok(BehaviorTree { ids: compiled_ids })
-    }
-}
-
-pub trait QueryCallback<'ctx, S, Ctx, Ext> {
-    type Iter: IntoIterator<Item = Value<Ext>> + 'ctx;
-
-    fn run(&self, ctx: &'ctx Ctx, args: S) -> Self::Iter;
-}
-
-impl<'ctx, F, I, S, Ctx, Ext> QueryCallback<'ctx, S, Ctx, Ext> for F
-where
-    F: Fn(&'ctx Ctx, S) -> I + 'static,
-    I: IntoIterator<Item = Value<Ext>> + 'ctx,
-    Ctx: 'ctx,
-{
-    type Iter = I;
-
-    fn run(&self, ctx: &'ctx Ctx, args: S) -> Self::Iter {
-        self(ctx, args)
     }
 }
