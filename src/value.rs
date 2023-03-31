@@ -214,7 +214,8 @@ pub trait TryFromValues<Ext>: Sized {
 
 impl<Ext, T, const N: usize> TryFromValues<Ext> for [T; N]
 where
-    T: TryFrom<Value<Ext>>,
+    Value<Ext>: TryInto<T>,
+    //T: TryFrom<Value<Ext>>,
 {
     const ARITY: usize = N;
 
@@ -252,7 +253,7 @@ macro_rules! impl_tuple_try_from_values {
         impl<Ext, $($param),*> TryFromValues<Ext> for ($($param,)*)
         where
             $(
-                $param: TryFrom<Value<Ext>>,
+                Value<Ext>: TryInto<$param>,
             )*
         {
             const ARITY: usize = const_arity!($($param)*);
@@ -263,9 +264,14 @@ macro_rules! impl_tuple_try_from_values {
             {
                 #[allow(unused)]
                 let mut iter = values.into_iter();
-                Some(($(
-                    $param::try_from(iter.next()?).ok()?,
-                )*))
+                let tuple = ($(
+                    { let _:$param; iter.next()?.try_into().ok()? },
+                )*);
+                if iter.next().is_none() {
+                    Some(tuple)
+                } else {
+                    None
+                }
             }
         }
         impl_tuple_try_from_values_next!($($param)*);
