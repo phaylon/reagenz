@@ -70,13 +70,15 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, thiserror::Error)]
+#[error("Expected {expected}, given {given}")]
 pub struct ArityError {
     pub expected: usize,
     pub given: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, thiserror::Error)]
+#[error("Expected {}, given {given}", expected.display_connected("or"))]
 pub struct KindError {
     pub expected: Kinds,
     pub given: Kind,

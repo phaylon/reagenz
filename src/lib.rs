@@ -10,7 +10,7 @@ pub use self::{
     tree::{
         BehaviorTree,
         ArityError, KindError, IdError,
-        Kind, Kinds,
+        Kind, Kinds, KindsDisplay,
         outcome::{
             Outcome,
             Action,
@@ -20,7 +20,7 @@ pub use self::{
         },
         script::{
             ScriptSource,
-            ScriptError,
+            ScriptError, ScriptErrorDisplayFull,
             CompileError, CompileErrorKind,
             ConflictError, ConflictErrorCause,
             CompileContext,

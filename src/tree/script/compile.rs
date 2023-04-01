@@ -80,6 +80,8 @@ impl<'a, Ctx, Ext, Eff> Compiler<'a, Ctx, Ext, Eff> {
         CompileContext {
             source_name: src.name.into(),
             source_section: src.content.offset_section_display(offset).to_string().into(),
+            source_line_number: offset.line_number(),
+            source_column_number: src.content.byte_offset_on_line(offset) + 1,
         }
     }
 
@@ -100,6 +102,7 @@ impl<'a, Ctx, Ext, Eff> Compiler<'a, Ctx, Ext, Eff> {
     fn analyze_conflict(&self, src_index: usize, decl: &Root<Decl>) -> ScriptError {
         ScriptError::Conflict(ConflictError {
             name: decl.name.value.to_smol_str(),
+            span: decl.name.item.location,
             kind: decl.kind(),
             cause: self.find_conflict_cause(src_index, &decl.name.value),
             context: self.offset_context(src_index, decl.node.location),
@@ -219,7 +222,8 @@ enum_class!(RefClass {
     Query = Raw,
 });
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{kind} at {}", context.position_display())]
 pub struct CompileError {
     pub kind: CompileErrorKind,
     pub context: CompileContext,
@@ -231,23 +235,39 @@ struct Source<'a> {
     name: &'a str,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum CompileErrorKind {
+    #[error(transparent)]
     Parse(ParseError),
+    #[error("Wrong number of signature items for `{keyword}` directive: {error}")]
     DirectiveSignatureArity { keyword: &'static str, offset: Offset, error: ArityError },
+    #[error("Wrong number of argument items for `{keyword}` directive: {error}")]
     DirectiveArgumentArity { keyword: &'static str, offset: Offset, error: ArityError },
+    #[error("Wrong number of patterns for the given targets: {error}")]
     PatternArity { offset: Offset, error: ArityError },
+    #[error("Invalid signature declaration")]
     InvalidRefDeclaration { offset: Offset },
+    #[error("Invalid root declaration")]
     InvalidRootDeclaration { offset: Offset },
+    #[error("Invalid query reference")]
     InvalidQueryRef { offset: Offset },
+    #[error("Invalid effect reference")]
     InvalidEffectRef { offset: Offset },
+    #[error("Variable `{name}` shadows existing lexical")]
     ShadowedLexical { name: SmolStr, span: Span },
+    #[error("Variable `{name}` shadows existing global")]
     ShadowedGlobal { name: SmolStr, span: Span },
+    #[error("Unbound variable `{name}`")]
     UnboundVariable { name: SmolStr, span: Span },
+    #[error("`{name}`: {error}")]
     Identifier { name: SmolStr, span: Span, error: IdError },
+    #[error("Unrecognized pattern")]
     UnrecognizedPattern { span: Span },
+    #[error("Unrecognized value")]
     UnrecognizedValue { span: Span },
+    #[error("Unrecognized node")]
     UnrecognizedNode { offset: Offset },
+    #[error("Unrecognized action directive")]
     UnrecognizedActionDirective { offset: Offset },
 }
 
@@ -257,9 +277,9 @@ impl CompileErrorKind {
     }
 
     fn into_compile_error(self, source: Source<'_>) -> CompileError {
-        let context_section = match self {
+        let (offset, context_section) = match self {
             | Self::Parse(ref error)
-                => error.section_display(source.content).to_string().into(),
+                => (error.offset(), error.section_display(source.content).to_string().into()),
             | Self::DirectiveSignatureArity { offset, .. }
             | Self::DirectiveArgumentArity { offset, .. }
             | Self::InvalidRefDeclaration { offset, .. }
@@ -269,20 +289,22 @@ impl CompileErrorKind {
             | Self::UnrecognizedNode { offset, .. }
             | Self::InvalidEffectRef { offset, .. }
             | Self::UnrecognizedActionDirective { offset, .. }
-                => source.content.offset_section_display(offset).to_string().into(),
+                => (offset, source.content.offset_section_display(offset).to_string().into()),
             | Self::ShadowedLexical { span, .. }
             | Self::ShadowedGlobal { span, .. }
             | Self::UnboundVariable { span, .. }
             | Self::Identifier { span, .. }
             | Self::UnrecognizedPattern { span, .. }
             | Self::UnrecognizedValue { span, .. }
-                => source.content.span_section_display(span).to_string().into(),
+                => (span.offset(), source.content.span_section_display(span).to_string().into()),
         };
         CompileError {
             kind: self,
             context: CompileContext {
                 source_name: source.name.into(),
                 source_section: context_section,
+                source_line_number: offset.line_number(),
+                source_column_number: source.content.byte_offset_on_line(offset),
             },
         }
     }
@@ -292,11 +314,43 @@ impl CompileErrorKind {
 pub struct CompileContext {
     pub source_name: Arc<str>,
     pub source_section: Arc<str>,
+    pub source_line_number: usize,
+    pub source_column_number: usize,
 }
 
-#[derive(Debug, Clone)]
+impl std::fmt::Display for CompileContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "--> {}", self.position_display())?;
+        self.source_section.fmt(f)
+    }
+}
+
+impl CompileContext {
+    fn position_display(&self) -> PositionDisplay<'_> {
+        PositionDisplay { context: self }
+    }
+}
+
+struct PositionDisplay<'a> {
+    context: &'a CompileContext,
+}
+
+impl<'a> std::fmt::Display for PositionDisplay<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let CompileContext { source_name, source_line_number, source_column_number, .. }
+            = &self.context;
+        write!(f, "{}:{}:{}", source_name, source_line_number, source_column_number)
+    }
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(
+    "Conflicting definitions for `{name}` at {} ({kind}) and {cause}",
+    context.position_display()
+)]
 pub struct ConflictError {
     pub name: SmolStr,
+    pub span: Span,
     pub kind: Kind,
     pub cause: ConflictErrorCause,
     pub context: CompileContext,
@@ -307,4 +361,27 @@ pub enum ConflictErrorCause {
     Predefined(Kind),
     SameSource(Kind, CompileContext),
     DifferentSource(Kind, CompileContext),
+}
+
+impl ConflictErrorCause {
+    pub fn context(&self) -> Option<&CompileContext> {
+        match self {
+            Self::Predefined(_) => None,
+            Self::SameSource(_, ctx) => Some(ctx),
+            Self::DifferentSource(_, ctx) => Some(ctx),
+        }
+    }
+}
+
+impl std::fmt::Display for ConflictErrorCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Predefined(kind) =>
+                write!(f, "a predefined identifier ({kind})"),
+            Self::SameSource(kind, ctx) =>
+                write!(f, "{} ({kind}) in the same source", ctx.position_display()),
+            Self::DifferentSource(kind, ctx) =>
+                write!(f, "{} ({kind})", ctx.position_display()),
+        }
+    }
 }

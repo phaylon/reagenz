@@ -191,6 +191,36 @@ impl<Ctx, Ext, Eff> IdSpace<Ctx, Ext, Eff> {
     }
 }
 
+impl Kinds {
+    pub fn display_connected(&self, connect: &'static str) -> KindsDisplay {
+        KindsDisplay { kinds: *self, connect }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct KindsDisplay {
+    kinds: Kinds,
+    connect: &'static str,
+}
+
+impl std::fmt::Display for KindsDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.kinds.is_empty() {
+            write!(f, "none")
+        } else if self.kinds.len() == 1 {
+            self.kinds.into_iter().next().unwrap().fmt(f)
+        } else {
+            let mut items = self.kinds.into_iter();
+            for _ in 0..(self.kinds.len() - 2) {
+                write!(f, "{}, ", items.next().unwrap())?;
+            }
+            let last_a = items.next().unwrap();
+            let last_b = items.next().unwrap();
+            write!(f, "{} {} {}", last_a, self.connect, last_b)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefIdx {
     Action(ActionIdx),
@@ -208,9 +238,12 @@ pub trait IdSpaceIndex<Ctx, Ext, Eff>: From<Index> + Into<Index> {
     fn id_map_mut(ids: &mut IdSpace<Ctx, Ext, Eff>) -> &mut IdMap<Self::Node, usize>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, thiserror::Error)]
 pub enum IdError {
+    #[error("Unknown identifier")]
     Unknown,
+    #[error("Invalid kind: {_0}")]
     Kind(KindError),
+    #[error("Wrong arity: {_0}")]
     Arity(ArityError),
 }
