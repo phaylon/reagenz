@@ -10,13 +10,25 @@ pub type Values<Ext> = Arc<[Value<Ext>]>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ExtValue<T>(pub T);
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Clone, PartialEq, PartialOrd)]
 pub enum Value<Ext> {
     Symbol(SmolStr),
     Int(i32),
     Float(f32),
     List(Values<Ext>),
     Ext(Ext),
+}
+
+impl<Ext: std::fmt::Debug> std::fmt::Debug for Value<Ext> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Symbol(value) => value.fmt(f),
+            Self::Int(value) => value.fmt(f),
+            Self::Float(value) => value.fmt(f),
+            Self::List(values) => f.debug_list().entries(values.iter()).finish(),
+            Self::Ext(value) => value.fmt(f),
+        }
+    }
 }
 
 impl<Ext> Value<Ext> {
