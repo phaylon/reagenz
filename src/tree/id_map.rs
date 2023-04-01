@@ -38,6 +38,15 @@ impl<N, D> IdMap<N, D> {
         self.indices.get(id).copied()
     }
 
+    pub fn name(&self, index: Index) -> Option<&SmolStr> {
+        for (name, name_index) in &self.indices {
+            if index == *name_index {
+                return Some(name);
+            }
+        }
+        None
+    }
+
     #[track_caller]
     pub fn set_node(&mut self, index: Index, node: N) {
         *self.nodes.get_mut(index.0).expect("id index is invalid") = node;

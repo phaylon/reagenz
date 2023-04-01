@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use id_map::*;
 pub use id_space::*;
 use smallvec::SmallVec;
+use smol_str::SmolStr;
 
 use crate::value::IntoValues;
 use crate::{Outcome, Action};
@@ -67,6 +68,11 @@ where
         let ctx = DiscoveryContext::new(view, self, &collection, index);
         self.ids.get(index).eval_discovery_nodes(&ctx);
         Ok(())
+    }
+
+    #[track_caller]
+    pub fn action_name(&self, action: &Action<Ext, Eff>) -> &SmolStr {
+        self.ids.action_name(action.index())
     }
 }
 

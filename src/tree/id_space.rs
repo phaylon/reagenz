@@ -147,6 +147,11 @@ impl<Ctx, Ext, Eff> IdSpace<Ctx, Ext, Eff> {
         }
     }
 
+    #[track_caller]
+    pub fn action_name(&self, action: ActionIdx) -> &SmolStr {
+        ActionIdx::id_map(self).name(action.into()).expect("action must be valid in this tree")
+    }
+
     pub fn resolve<Idx>(&self, name: &str, given: usize) -> Result<Idx, IdError>
     where
         Idx: IdSpaceIndex<Ctx, Ext, Eff>,
