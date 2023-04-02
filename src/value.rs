@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use float_ord::FloatOrd;
 use smol_str::SmolStr;
 
 use crate::gen::{fn_enum_is_variant, fn_enum_variant_access, fn_enum_variant_try_into};
@@ -10,11 +11,11 @@ pub type Values<Ext> = Arc<[Value<Ext>]>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ExtValue<T>(pub T);
 
-#[derive(Clone, PartialEq, PartialOrd)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Value<Ext> {
     Symbol(SmolStr),
     Int(i32),
-    Float(f32),
+    Float(FloatOrd<f32>),
     List(Values<Ext>),
     Ext(Ext),
 }
@@ -40,13 +41,13 @@ impl<Ext> Value<Ext> {
 
     fn_enum_variant_access!(pub symbol -> &SmolStr, Self::Symbol(symbol) => symbol);
     fn_enum_variant_access!(pub int -> i32, Self::Int(value) => *value);
-    fn_enum_variant_access!(pub float -> f32, Self::Float(value) => *value);
+    fn_enum_variant_access!(pub float -> FloatOrd<f32>, Self::Float(value) => *value);
     fn_enum_variant_access!(pub list -> &Values<Ext>, Self::List(list) => list);
     fn_enum_variant_access!(pub ext -> &Ext, Self::Ext(ext) => ext);
 
     fn_enum_variant_try_into!(pub try_into_symbol -> SmolStr, Self::Symbol(symbol) => symbol);
     fn_enum_variant_try_into!(pub try_into_int -> i32, Self::Int(value) => value);
-    fn_enum_variant_try_into!(pub try_into_float -> f32, Self::Float(value) => value);
+    fn_enum_variant_try_into!(pub try_into_float -> FloatOrd<f32>, Self::Float(value) => value);
     fn_enum_variant_try_into!(pub try_into_list -> Values<Ext>, Self::List(list) => list);
     fn_enum_variant_try_into!(pub try_into_ext -> Ext, Self::Ext(ext) => ext);
 }
@@ -81,7 +82,8 @@ impl_value_from!(SmolStr, Self::Symbol);
 impl_value_from!(&SmolStr, |value| Self::Symbol(value.clone()));
 impl_value_from!(&str, |value| Self::Symbol(value.into()));
 impl_value_from!(i32, Self::Int);
-impl_value_from!(f32, Self::Float);
+impl_value_from!(f32, |value| Self::Float(FloatOrd(value)));
+impl_value_from!(FloatOrd<f32>, |value| Self::Float(value));
 
 impl<Ext> From<ExtValue<Ext>> for Value<Ext> {
     fn from(value: ExtValue<Ext>) -> Self {
@@ -125,7 +127,8 @@ macro_rules! impl_value_try_into {
 
 impl_value_try_into!(SmolStr, Self::Symbol(symbol) => symbol);
 impl_value_try_into!(i32, Self::Int(value) => value);
-impl_value_try_into!(f32, Self::Float(value) => value);
+impl_value_try_into!(f32, Self::Float(value) => value.0);
+impl_value_try_into!(FloatOrd<f32>, Self::Float(value) => value);
 
 impl<Ext> TryInto<ExtValue<Ext>> for Value<Ext> {
     type Error = Self;

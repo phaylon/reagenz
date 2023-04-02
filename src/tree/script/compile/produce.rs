@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use float_ord::FloatOrd;
 use treelang::{Node as ScriptNode, Item, ItemKind};
 
 use crate::tree::{ArityError, ActionIdx, NodeIdx, RefIdx};
@@ -259,7 +260,7 @@ fn compile_value<Ctx, Ext, Eff>(
     } else if let ItemKind::Int(value) = item.kind {
         Ok(ProtoValue::Value(Value::Int(value)))
     } else if let ItemKind::Float(value) = item.kind {
-        Ok(ProtoValue::Value(Value::Float(value)))
+        Ok(ProtoValue::Value(Value::Float(FloatOrd(value))))
     } else if let ItemKind::Brackets(values) = &item.kind {
         Ok(ProtoValue::List(compile_values(env, values)?))
     } else {
@@ -289,7 +290,7 @@ fn compile_pattern_item<Ctx, Ext, Eff>(
     } else if let ItemKind::Int(value) = item.kind {
         Ok(Pattern::Exact(Value::Int(value)))
     } else if let ItemKind::Float(value) = item.kind {
-        Ok(Pattern::Exact(Value::Float(value)))
+        Ok(Pattern::Exact(Value::Float(FloatOrd(value))))
     } else if let ItemKind::Brackets(items) = &item.kind {
         Ok(Pattern::List(compile_pattern_items(env, items)?))
     } else {

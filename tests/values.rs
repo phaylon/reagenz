@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use float_ord::FloatOrd;
 use reagenz::{Value, ExtValue, IntoValues, TryFromValues};
 use smol_str::SmolStr;
 
@@ -16,8 +17,8 @@ fn into_value() {
     assert_eq!(TestValue::from(23), Int(23));
     assert_eq!(TestValue::from(23i32), Int(23));
 
-    assert_eq!(TestValue::from(0.0), Float(0.0));
-    assert_eq!(TestValue::from(0.0f32), Float(0.0));
+    assert_eq!(TestValue::from(0.0), Float(FloatOrd(0.0)));
+    assert_eq!(TestValue::from(0.0f32), Float(FloatOrd(0.0)));
 
     assert_eq!(TestValue::from("abc"), Symbol("abc".into()));
     assert_eq!(TestValue::from(SmolStr::from("abc")), Symbol("abc".into()));
