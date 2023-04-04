@@ -9,17 +9,14 @@ use super::{Index, IdMap, KindError, ArityError};
 use super::outcome::{Outcome};
 use super::script::{ActionRoot, NodeRoot};
 
-pub type QueryFn<Ctx, Ext, Eff> = dyn for<'ctx, 'args, 'iter_fn> Fn(
-    &'ctx Ctx,
-    &'args [Value<Ext>],
-    &'iter_fn mut dyn for<'iter> FnMut(
-        &'iter mut dyn Iterator<Item = Value<Ext>>,
-    ) -> Outcome<Ext, Eff>,
+pub type QueryFn<Ctx, Ext, Eff> = fn(
+    &Ctx,
+    &[Value<Ext>],
+    &mut dyn FnMut(&mut dyn Iterator<Item = Value<Ext>>) -> Outcome<Ext, Eff>,
 ) -> Outcome<Ext, Eff>;
-
-pub type GlobalFn<Ctx, Ext> = dyn Fn(&Ctx) -> Value<Ext>;
-pub type EffectFn<Ctx, Ext, Eff> = dyn Fn(&Ctx, &[Value<Ext>]) -> Option<Eff>;
-pub type CondFn<Ctx, Ext> = dyn Fn(&Ctx, &[Value<Ext>]) -> bool;
+pub type GlobalFn<Ctx, Ext> = fn(&Ctx) -> Value<Ext>;
+pub type EffectFn<Ctx, Ext, Eff> = fn(&Ctx, &[Value<Ext>]) -> Option<Eff>;
+pub type CondFn<Ctx, Ext> = fn(&Ctx, &[Value<Ext>]) -> bool;
 
 macro_rules! generate {
     {
@@ -102,10 +99,10 @@ macro_rules! generate {
 }
 
 generate! {
-    globals: Global/GlobalIdx (Arc<GlobalFn<Ctx, Ext>>, usize) => "a global",
-    effects: Effect/EffectIdx (Arc<EffectFn<Ctx, Ext, Eff>>, usize) => "an effect",
-    conditions: Cond/CondIdx (Arc<CondFn<Ctx, Ext>>, usize) => "a condition",
-    queries: Query/QueryIdx (Arc<QueryFn<Ctx, Ext, Eff>>, usize) => "a query",
+    globals: Global/GlobalIdx (GlobalFn<Ctx, Ext>, usize) => "a global",
+    effects: Effect/EffectIdx (EffectFn<Ctx, Ext, Eff>, usize) => "an effect",
+    conditions: Cond/CondIdx (CondFn<Ctx, Ext>, usize) => "a condition",
+    queries: Query/QueryIdx (QueryFn<Ctx, Ext, Eff>, usize) => "a query",
     action_roots: Action/ActionIdx (Arc<ActionRoot<Ext>>, usize) => "an action",
     node_roots: Node/NodeIdx (Arc<NodeRoot<Ext>>, usize) => "a node",
 }
