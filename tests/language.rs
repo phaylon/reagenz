@@ -12,7 +12,7 @@ fn normalize(source: &str) -> String {
 #[test]
 fn globals() {
     let mut tree = BehaviorTreeBuilder::<i32, (), i32>::default();
-    tree.register_effect("emit-value", 1, effect_fn!(_, value: i32 => Some(value)));
+    tree.register_effect("emit-value", effect_fn!(_, value: i32 => Some(value)));
     tree.register_global("$global", |ctx| (*ctx).into());
     let tree = tree.compile_str(INDENT, "test", &normalize("
         |action: test
@@ -27,7 +27,7 @@ fn globals() {
 #[test]
 fn effects() {
     let mut tree = BehaviorTreeBuilder::<i32, (), i32>::default();
-    tree.register_effect("emit-value", 1, effect_fn!(ctx, value: i32 => {
+    tree.register_effect("emit-value", effect_fn!(ctx, value: i32 => {
         (*ctx != value).then_some(*ctx + value)
     }));
     let tree = tree.compile_str(INDENT, "test", &normalize("
@@ -44,7 +44,7 @@ fn effects() {
 #[test]
 fn conditions() {
     let mut tree = BehaviorTreeBuilder::<(), (), ()>::default();
-    tree.register_condition("test", 1, cond_fn!(_, value: i32 => value == 23));
+    tree.register_condition("test", cond_fn!(_, value: i32 => value == 23));
     let tree = tree.compile_str(INDENT, "test", "").unwrap();
     assert_eq!(tree.evaluate(&(), "test", [23]), Ok(Outcome::Success));
     assert_eq!(tree.evaluate(&(), "test", [42]), Ok(Outcome::Failure));
@@ -53,8 +53,8 @@ fn conditions() {
 #[test]
 fn queries() {
     let mut tree = BehaviorTreeBuilder::<&[i32], (), ()>::default();
-    tree.register_condition("check", 1, cond_fn!(_, value: i32 => value != 0));
-    tree.register_query("values", 0, query_fn!(ctx => ctx.iter().copied().map(Into::into)));
+    tree.register_condition("check", cond_fn!(_, value: i32 => value != 0));
+    tree.register_query("values", query_fn!(ctx => ctx.iter().copied().map(Into::into)));
     let tree = tree.compile_str(INDENT, "test", &normalize("
         |node: test-every
         |  for-every $value: values
@@ -93,8 +93,8 @@ fn queries() {
 fn patterns() {
     let mut tree = BehaviorTreeBuilder::<&[[i32; 2]], (), (i32, i32)>::default();
     tree.register_global("$global", |_| 123.into());
-    tree.register_effect("emit-value", 2, effect_fn!(_, a: i32, b: i32 => Some((a, b))));
-    tree.register_query("values", 0, query_fn!(ctx => ctx.iter().copied().map(Into::into)));
+    tree.register_effect("emit-value", effect_fn!(_, a: i32, b: i32 => Some((a, b))));
+    tree.register_query("values", query_fn!(ctx => ctx.iter().copied().map(Into::into)));
     let tree = tree.compile_str(INDENT, "test", &normalize("
         |action: emit $a $b
         |  effects:

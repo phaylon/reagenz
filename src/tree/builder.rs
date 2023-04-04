@@ -32,7 +32,7 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
     }
 
     #[track_caller]
-    pub fn register_effect<N>(&mut self, id: N, arity: usize, handler: EffectFn<Ctx, Ext, Eff>)
+    pub fn register_effect<N>(&mut self, id: N, (arity, handler): (usize, EffectFn<Ctx, Ext, Eff>))
     where
         N: Into<SmolStr>,
         Ext: Clone,
@@ -46,7 +46,7 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
     }
 
     #[track_caller]
-    pub fn register_query<N>(&mut self, id: N, arity: usize, handler: QueryFn<Ctx, Ext, Eff>)
+    pub fn register_query<N>(&mut self, id: N, (arity, handler): (usize, QueryFn<Ctx, Ext, Eff>))
     where
         N: Into<SmolStr>,
         Ext: Clone,
@@ -60,7 +60,7 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
     }
 
     #[track_caller]
-    pub fn register_condition<N>(&mut self, id: N, arity: usize, handler: CondFn<Ctx, Ext>)
+    pub fn register_condition<N>(&mut self, id: N, (arity, handler): (usize, CondFn<Ctx, Ext>))
     where
         N: Into<SmolStr>,
         Ext: Clone,

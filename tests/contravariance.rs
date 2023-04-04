@@ -16,8 +16,8 @@ struct Context<'a> {
 
 fn make_tree<'a>() -> Tree<'a> {
     let mut tree: BehaviorTreeBuilder<Context<'_>, (), i32> = BehaviorTreeBuilder::default();
-    tree.register_effect("emit-value", 1, effect_fn!(_, v: i32 => Some(v)));
-    tree.register_query("values", 0, query_fn!(ctx => ctx.values.iter().copied().map(Into::into)));
+    tree.register_effect("emit-value", effect_fn!(_, v: i32 => Some(v)));
+    tree.register_query("values", query_fn!(ctx => ctx.values.iter().copied().map(Into::into)));
     tree.compile_str(INDENT, "test", &normalize("
         |action: emit $v
         |  effects:
