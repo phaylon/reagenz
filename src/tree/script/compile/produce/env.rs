@@ -1,6 +1,8 @@
+use src_ctx::SourceError;
+
+use crate::ScriptError;
 use crate::tree::id_space::{IdSpace, GlobalIdx};
-use crate::tree::script::{CompileErrorKind, Pattern, ProtoValue};
-use crate::tree::script::compile::CompileResult;
+use crate::tree::script::{Pattern, ProtoValue, ScriptResult};
 use crate::tree::script::compile::parse::{Var, ItemValue};
 
 
@@ -19,13 +21,21 @@ impl<'a, Ctx, Ext, Eff> Env<'a, Ctx, Ext, Eff> {
         }
     }
 
-    pub fn declare(&mut self, var: &ItemValue<Var>) -> CompileResult<usize> {
+    pub fn declare(&mut self, var: &ItemValue<Var>) -> ScriptResult<usize> {
         let name = var.as_smol_str();
         let span = var.item.location;
         if self.vars.contains(&var.value) {
-            Err(CompileErrorKind::ShadowedLexical { span, name: name.clone() })
+            Err(SourceError::new(
+                ScriptError::ShadowedLexical { name: name.clone() },
+                span.start(),
+                "shadowing binding",
+            ))
         } else if self.ids.contains::<GlobalIdx>(name) {
-            Err(CompileErrorKind::ShadowedGlobal { span, name: name.clone() })
+            Err(SourceError::new(
+                ScriptError::ShadowedGlobal { name: name.clone() },
+                span.start(),
+                "shadowing binding",
+            ))
         } else {
             let index = self.vars.len();
             self.vars.push(var.value.clone());
@@ -34,10 +44,10 @@ impl<'a, Ctx, Ext, Eff> Env<'a, Ctx, Ext, Eff> {
         }
     }
 
-    pub fn scope<'i, I, F, R>(&mut self, vars: I, scope: F) -> CompileResult<R>
+    pub fn scope<'i, I, F, R>(&mut self, vars: I, scope: F) -> ScriptResult<R>
     where
         I: IntoIterator<Item = &'i ItemValue<Var>>,
-        F: FnOnce(&mut Self) -> CompileResult<R>,
+        F: FnOnce(&mut Self) -> ScriptResult<R>,
     {
         let len = self.vars.len();
         let mut env = scopeguard::guard(self, |env| env.vars.truncate(len));
@@ -59,7 +69,7 @@ impl<'a, Ctx, Ext, Eff> Env<'a, Ctx, Ext, Eff> {
         }
     }
 
-    pub fn resolve(&self, var: &ItemValue<Var>) -> CompileResult<ProtoValue<Ext>> {
+    pub fn resolve(&self, var: &ItemValue<Var>) -> ScriptResult<ProtoValue<Ext>> {
         let name = var.value.as_smol_str();
         let span = var.item.location;
         if let Some(index) = self.vars.iter().position(|prev_var| *prev_var == var.value) {
@@ -67,7 +77,11 @@ impl<'a, Ctx, Ext, Eff> Env<'a, Ctx, Ext, Eff> {
         } else if let Ok(index) = self.ids.resolve::<GlobalIdx>(name, 0) {
             Ok(ProtoValue::Global(index))
         } else {
-            Err(CompileErrorKind::UnboundVariable { span, name: name.clone() })
+            Err(SourceError::new(
+                ScriptError::UnboundVariable { name: name.clone() },
+                span.start(),
+                "unbound variable",
+            ))
         }
     }
 

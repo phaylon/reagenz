@@ -16,6 +16,7 @@ if_chain = "1.0.2"
 scopeguard = "1.1.0"
 flagnum = { git = "https://github.com/phaylon/flagnum", version = "0.1.0" }
 float-ord = "0.3.2"
+src-ctx = { git = "https://github.com/phaylon/src-ctx", version = "0.1.0" }
 
 [dev-dependencies]
 assert_matches = "1.5.0"

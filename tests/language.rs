@@ -1,13 +1,10 @@
 use reagenz::{BehaviorTreeBuilder, Outcome, effect_fn, cond_fn, query_fn};
-use treelang::{normalize_source, Indent};
+use src_ctx::normalize;
+use treelang::{Indent};
 use assert_matches::assert_matches;
 
 
 const INDENT: Indent = Indent::spaces(2);
-
-fn normalize(source: &str) -> String {
-    normalize_source('|', source).unwrap()
-}
 
 #[test]
 fn globals() {

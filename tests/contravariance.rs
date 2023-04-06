@@ -1,14 +1,11 @@
 use reagenz::{BehaviorTree, BehaviorTreeBuilder, effect_fn, query_fn, Outcome};
-use treelang::{Indent, normalize_source};
+use src_ctx::normalize;
+use treelang::{Indent};
 
 
 type Tree<'a> = BehaviorTree<Context<'a>, (), i32>;
 
 const INDENT: Indent = Indent::spaces(2);
-
-fn normalize(source: &str) -> String {
-    normalize_source('|', source).unwrap()
-}
 
 struct Context<'a> {
     values: &'a [i32],

@@ -1,18 +1,19 @@
 use smol_str::SmolStr;
+use src_ctx::SourceError;
 use treelang::{Node as ScriptNode, Item, Directive};
 
 use crate::gen::smol_str_wrapper;
 use crate::str::{is_symbol, is_variable};
 use crate::tree::ArityError;
 
-use super::{CompileErrorKind, CompileResult, RefClass, Root, Decl};
+use super::{ScriptResult, ScriptError, RefClass, Root, Decl};
 
 
 pub mod kw;
 
 pub(super) fn parse_root_declaration(
     node: &ScriptNode,
-) -> CompileResult<Root<Decl>> {
+) -> ScriptResult<Root<Decl>> {
     if let Some(ref_signature) = try_parse_keyword_directive(node, kw::def::NODE)? {
         let (name, parameters) = parse_ref_declaration(ref_signature, node)?;
         Ok(Root::Node(Decl { name, parameters, node: node.clone() }))
@@ -20,7 +21,7 @@ pub(super) fn parse_root_declaration(
         let (name, parameters) = parse_ref_declaration(ref_signature, node)?;
         Ok(Root::Action(Decl { name, parameters, node: node.clone() }))
     } else {
-        Err(CompileErrorKind::InvalidRootDeclaration { offset: node.location })
+        Err(SourceError::new(ScriptError::InvalidRootDeclaration, node.location, "declaration"))
     }
 }
 
@@ -37,36 +38,42 @@ pub(super) fn match_directive<'a>(
 pub(super) fn try_parse_label_directive(
     node: &ScriptNode,
     keyword: &'static str,
-) -> CompileResult<bool> {
+) -> ScriptResult<bool> {
     let Some(arguments) = try_parse_keyword_directive(node, keyword)? else {
         return Ok(false);
     };
     if arguments.is_empty() {
         Ok(true)
     } else {
-        Err(CompileErrorKind::DirectiveArgumentArity {
-            keyword,
-            offset: node.location,
-            error: ArityError { expected: 0, given: arguments.len() }
-        })
+        Err(SourceError::new(
+            ScriptError::DirectiveArgumentArity {
+                keyword,
+                error: ArityError { expected: 0, given: arguments.len() },
+            },
+            node.location,
+            "unexpected arguments",
+        ))
     }
 }
 
 fn try_parse_keyword_directive<'a>(
     node: &'a ScriptNode,
     keyword: &'static str,
-) -> CompileResult<Option<&'a [Item]>> {
+) -> ScriptResult<Option<&'a [Item]>> {
     let Some((signature, arguments)) = match_directive(node, keyword) else {
         return Ok(None);
     };
     if signature.is_empty() {
         Ok(Some(arguments))
     } else {
-        Err(CompileErrorKind::DirectiveSignatureArity {
-            keyword,
-            offset: node.location,
-            error: ArityError { expected: 0, given: signature.len() },
-        })
+        Err(SourceError::new(
+            ScriptError::DirectiveSignatureArity {
+                keyword,
+                error: ArityError { expected: 0, given: signature.len() },
+            },
+            node.location,
+            "unexpected signature elements",
+        ))
     }
 }
 
@@ -93,14 +100,22 @@ pub(super) fn match_ref(items: &[Item]) -> Option<(RefClass<ItemValue<Sym>>, &[I
 fn parse_ref_declaration(
     items: &[Item],
     node: &ScriptNode,
-) -> CompileResult<(ItemValue<Sym>, Vec<ItemValue<Var>>)> {
+) -> ScriptResult<(ItemValue<Sym>, Vec<ItemValue<Var>>)> {
     let Some((RefClass::Raw(ref_name), parameter_items)) = match_ref(items) else {
-        return Err(CompileErrorKind::InvalidRefDeclaration { offset: node.location });
+        return Err(SourceError::new(
+            ScriptError::InvalidRefDeclaration,
+            node.location,
+            "invalid declaration",
+        ));
     };
     let mut parameters = Vec::new();
     for item in parameter_items {
         let Some(var) = match_var(item) else {
-            return Err(CompileErrorKind::InvalidRefDeclaration { offset: item.location.offset() });
+            return Err(SourceError::new(
+                ScriptError::InvalidRefDeclaration,
+                item.location.start(),
+                "unexpected parameter",
+            ));
         };
         parameters.push(var);
     }

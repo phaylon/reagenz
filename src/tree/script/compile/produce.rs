@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use float_ord::FloatOrd;
+use src_ctx::SourceError;
 use treelang::{Node as ScriptNode, Item, ItemKind};
 
 use crate::tree::{ArityError, ActionIdx, NodeIdx, RefIdx};
@@ -15,7 +16,7 @@ use super::parse::{
     Var, ItemValue, kw, try_parse_label_directive, match_ref, Sym, match_var, match_sym,
     match_directive,
 };
-use super::{Root, Decl, CompileResult, RefClass, CompileErrorKind};
+use super::{Root, Decl, ScriptResult, ScriptError, RefClass};
 
 use env::*;
 
@@ -26,11 +27,15 @@ pub(super) fn compile_root_declaration<Ctx, Ext, Eff>(
     ids: &IdSpace<Ctx, Ext, Eff>,
     decl: &Decl,
     index: Root<NodeIdx, ActionIdx>,
-) -> CompileResult<Root<NodeRoot<Ext>, ActionRoot<Ext>>> {
+) -> ScriptResult<Root<NodeRoot<Ext>, ActionRoot<Ext>>> {
     index.map_each(
-        |index| compile_node_root(index, ids, &decl.parameters, decl.node.children()),
-        |index| compile_action_root(index, ids, &decl.parameters, decl.node.children()),
-    ).lift()
+        |index| {
+            compile_node_root(index, ids, &decl.parameters, decl.node.children())
+        },
+        |index| {
+            compile_action_root(index, ids, &decl.parameters, decl.node.children())
+        },
+    ).lift().map_err(|error| error.with_context(decl.node.location))
 }
 
 fn compile_node_root<Ctx, Ext, Eff>(
@@ -38,9 +43,8 @@ fn compile_node_root<Ctx, Ext, Eff>(
     ids: &IdSpace<Ctx, Ext, Eff>,
     parameters: &[ItemValue<Var>],
     children: &[ScriptNode],
-) -> CompileResult<NodeRoot<Ext>> {
+) -> ScriptResult<NodeRoot<Ext>> {
     let mut env = Env::new(ids);
-
     env.scope(parameters.iter(), |env| {
         let nodes = compile_branches(env, children)?;
         let lexicals = env.max_vars();
@@ -53,7 +57,7 @@ fn compile_action_root<Ctx, Ext, Eff>(
     ids: &IdSpace<Ctx, Ext, Eff>,
     parameters: &[ItemValue<Var>],
     children: &[ScriptNode],
-) -> CompileResult<ActionRoot<Ext>> {
+) -> ScriptResult<ActionRoot<Ext>> {
     let mut conditions = Vec::new();
     let mut effects = Vec::new();
     let mut discovery = Vec::new();
@@ -69,7 +73,11 @@ fn compile_action_root<Ctx, Ext, Eff>(
                 continue 'children;
             }
         }
-        return Err(CompileErrorKind::UnrecognizedActionDirective { offset: child.location });
+        return Err(SourceError::new(
+            ScriptError::UnrecognizedActionDirective,
+            child.location,
+            "expected action directive",
+        ));
     }
 
     let mut env = Env::new(ids);
@@ -86,7 +94,7 @@ fn compile_action_root<Ctx, Ext, Eff>(
 fn compile_effects<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     nodes: &[ScriptNode],
-) -> CompileResult<Arc<[(EffectIdx, ProtoValues<Ext>)]>> {
+) -> ScriptResult<Arc<[(EffectIdx, ProtoValues<Ext>)]>> {
     let mut compiled = Vec::new();
     for node in nodes {
         compiled.push(compile_effect(env, node)?);
@@ -97,11 +105,15 @@ fn compile_effects<Ctx, Ext, Eff>(
 fn compile_effect<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
-) -> CompileResult<(EffectIdx, ProtoValues<Ext>)> {
+) -> ScriptResult<(EffectIdx, ProtoValues<Ext>)> {
     let (name, arguments) = node.statement()
         .and_then(|stmt| match_ref(&stmt.signature))
         .filter(|(name, _)| matches!(name, RefClass::Raw(_)))
-        .ok_or(CompileErrorKind::InvalidEffectRef { offset: node.location })?;
+        .ok_or(SourceError::new(
+            ScriptError::InvalidEffectRef,
+            node.location,
+            "expected effect reference",
+        ))?;
     let index = env.ids().resolve(&name, arguments.len())
         .map_err(|error| convert_id_error(&name, error))?;
     let arguments = compile_values(env, arguments)?;
@@ -111,7 +123,7 @@ fn compile_effect<Ctx, Ext, Eff>(
 fn compile_branches<'i, Ctx, Ext, Eff, I>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     nodes: I,
-) -> CompileResult<Nodes<Ext>>
+) -> ScriptResult<Nodes<Ext>>
 where
     I: IntoIterator<Item = &'i ScriptNode>,
 {
@@ -125,7 +137,7 @@ where
 fn try_compile_branch_dispatch<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
-) -> CompileResult<Option<Node<Ext>>> {
+) -> ScriptResult<Option<Node<Ext>>> {
     for (keyword, mode) in [
         (kw::dir::SEQUENCE, Dispatch::Sequence),
         (kw::dir::SELECT, Dispatch::Selection),
@@ -142,26 +154,26 @@ fn try_compile_branch_dispatch<Ctx, Ext, Eff>(
 fn convert_id_error(
     name: &ItemValue<Sym>,
     error: IdError,
-) -> CompileErrorKind {
-    CompileErrorKind::Identifier {
-        name: name.to_smol_str(),
-        span: name.item.location,
-        error,
-    }
+) -> SourceError<ScriptError> {
+    SourceError::new(
+        ScriptError::Identifier { name: name.to_smol_str(), error },
+        name.item.location.start(),
+        "identifier",
+    )
 }
 
 fn resolve_ref_symbol<Ctx, Ext, Eff>(
     env: &Env<'_, Ctx, Ext, Eff>,
     name: &ItemValue<Sym>,
     arity: usize,
-) -> CompileResult<RefIdx> {
+) -> ScriptResult<RefIdx> {
     env.ids().resolve_ref(name.as_str(), arity).map_err(|error| convert_id_error(name, error))
 }
 
 fn try_compile_branch_ref<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
-) -> CompileResult<Option<Node<Ext>>> {
+) -> ScriptResult<Option<Node<Ext>>> {
     if let Some(stmt) = node.statement() {
         if let Some((ref_name, arguments)) = match_ref(&stmt.signature) {
             let (value, mode) = match ref_name {
@@ -179,13 +191,16 @@ fn try_compile_branch_ref<Ctx, Ext, Eff>(
 fn try_compile_branch_match<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
-) -> CompileResult<Option<Node<Ext>>> {
+) -> ScriptResult<Option<Node<Ext>>> {
     if let Some((patterns, targets)) = match_directive(node, kw::dir::MATCH) {
         if targets.len() != patterns.len() {
-            return Err(CompileErrorKind::PatternArity {
-                offset: node.location,
-                error: ArityError { expected: targets.len(), given: patterns.len() },
-            });
+            return Err(SourceError::new(
+                ScriptError::PatternArity {
+                    error: ArityError { expected: targets.len(), given: patterns.len() },
+                },
+                node.location,
+                "match with arity mismatch",
+            ));
         }
         return env.scope([], |env| {
             let targets = compile_values(env, targets)?;
@@ -200,7 +215,7 @@ fn try_compile_branch_match<Ctx, Ext, Eff>(
 fn try_compile_branch_query<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
-) -> CompileResult<Option<Node<Ext>>> {
+) -> ScriptResult<Option<Node<Ext>>> {
     for (keyword, mode) in [
         (kw::dir::query::SELECT, QueryMode::Selection),
         (kw::dir::query::SEQUENCE, QueryMode::Sequence),
@@ -210,14 +225,21 @@ fn try_compile_branch_query<Ctx, Ext, Eff>(
     ] {
         if let Some((signature, arguments)) = match_directive(node, keyword) {
             let [pattern] = signature else {
-                return Err(CompileErrorKind::DirectiveSignatureArity {
-                    keyword,
-                    offset: node.location,
-                    error: ArityError { expected: 1, given: signature.len() },
-                });
+                return Err(SourceError::new(
+                    ScriptError::DirectiveSignatureArity {
+                        keyword,
+                        error: ArityError { expected: 1, given: signature.len() },
+                    },
+                    node.location,
+                    "query with invalid signature",
+                ));
             };
             let Some((RefClass::Raw(name), arguments)) = match_ref(arguments) else {
-                return Err(CompileErrorKind::InvalidQueryRef { offset: node.location });
+                return Err(SourceError::new(
+                    ScriptError::InvalidQueryRef,
+                    node.location,
+                    "expected query reference",
+                ));
             };
             let index = env.ids().resolve(&name, arguments.len())
                 .map_err(|error| convert_id_error(&name, error))?;
@@ -235,7 +257,7 @@ fn try_compile_branch_query<Ctx, Ext, Eff>(
 fn compile_branch<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
-) -> CompileResult<Node<Ext>> {
+) -> ScriptResult<Node<Ext>> {
     if let Some(compiled) = try_compile_branch_dispatch(env, node)? {
         Ok(compiled)
     } else if let Some(compiled) = try_compile_branch_ref(env, node)? {
@@ -245,14 +267,14 @@ fn compile_branch<Ctx, Ext, Eff>(
     } else if let Some(compiled) = try_compile_branch_query(env, node)? {
         Ok(compiled)
     } else {
-        Err(CompileErrorKind::UnrecognizedNode { offset: node.location })
+        Err(SourceError::new(ScriptError::UnrecognizedNode, node.location, "expected logic node"))
     }
 }
 
 fn compile_value<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     item: &Item,
-) -> CompileResult<ProtoValue<Ext>> {
+) -> ScriptResult<ProtoValue<Ext>> {
     if let Some(var) = match_var(item) {
         env.resolve(&var)
     } else if let Some(sym) = match_sym(item) {
@@ -264,14 +286,18 @@ fn compile_value<Ctx, Ext, Eff>(
     } else if let ItemKind::Brackets(values) = &item.kind {
         Ok(ProtoValue::List(compile_values(env, values)?))
     } else {
-        Err(CompileErrorKind::UnrecognizedValue { span: item.location })
+        Err(SourceError::new(
+            ScriptError::UnrecognizedValue,
+            item.location.start(),
+            "expected value",
+        ))
     }
 }
 
 fn compile_values<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     values: &[Item],
-) -> CompileResult<ProtoValues<Ext>> {
+) -> ScriptResult<ProtoValues<Ext>> {
     let mut compiled = Vec::new();
     for value in values {
         compiled.push(compile_value(env, value)?);
@@ -282,7 +308,7 @@ fn compile_values<Ctx, Ext, Eff>(
 fn compile_pattern_item<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     item: &Item,
-) -> CompileResult<Pattern<Ext>> {
+) -> ScriptResult<Pattern<Ext>> {
     if let Some(var) = match_var(item) {
         Ok(env.resolve_pattern(&var))
     } else if let Some(sym) = match_sym(item) {
@@ -294,14 +320,18 @@ fn compile_pattern_item<Ctx, Ext, Eff>(
     } else if let ItemKind::Brackets(items) = &item.kind {
         Ok(Pattern::List(compile_pattern_items(env, items)?))
     } else {
-        Err(CompileErrorKind::UnrecognizedPattern { span: item.location })
+        Err(SourceError::new(
+            ScriptError::UnrecognizedPattern,
+            item.location.start(),
+            "expected pattern",
+        ))
     }
 }
 
 fn compile_pattern_items<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     items: &[Item],
-) -> CompileResult<Patterns<Ext>> {
+) -> ScriptResult<Patterns<Ext>> {
     let mut compiled = Vec::new();
     for item in items {
         compiled.push(compile_pattern_item(env, item)?);

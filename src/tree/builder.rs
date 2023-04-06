@@ -8,7 +8,7 @@ use crate::tree::id_space::{QueryIdx, CondIdx};
 
 use super::{BehaviorTree, GlobalFn, EffectFn, QueryFn, CondFn};
 use super::id_space::{IdSpace, GlobalIdx, EffectIdx};
-use super::script::{ScriptSource, Compiler, ScriptResult};
+use super::script::{ScriptSource, Compiler, CompileResult};
 
 
 #[derive(Derivative)]
@@ -78,9 +78,9 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
         indent: Indent,
         name: &str,
         content: &str,
-    ) -> ScriptResult<BehaviorTree<Ctx, Ext, Eff>> {
+    ) -> CompileResult<BehaviorTree<Ctx, Ext, Eff>> {
         self.compile(indent, [
-            ScriptSource::Str { name, content },
+            ScriptSource::Str { name: name.into(), content: content.into() },
         ])
     }
 
@@ -88,9 +88,9 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
         self,
         indent: Indent,
         sources: T,
-    ) -> ScriptResult<BehaviorTree<Ctx, Ext, Eff>>
+    ) -> CompileResult<BehaviorTree<Ctx, Ext, Eff>>
     where
-        T: IntoIterator<Item = ScriptSource<'a>>,
+        T: IntoIterator<Item = ScriptSource>,
     {
         let mut compiler = Compiler::new(self.ids, indent);
         for source in sources {
