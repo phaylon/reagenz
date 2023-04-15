@@ -357,10 +357,10 @@ impl QueryMode {
             Self::Sequence => {
                 let query_fn = ctx.tree().ids.get(index);
                 query_fn(ctx.view(), arguments, &mut |iter| {
-                    for topic_value in iter {
+                    'values: for topic_value in iter {
                         lex.truncate(lex_len);
                         if !pattern.try_apply(ctx, &mut lex, &topic_value) {
-                            return Outcome::Failure;
+                            continue 'values;
                         }
                         let result = eval_sequence(ctx, &mut lex, branches);
                         if result.is_non_success() {
@@ -373,10 +373,10 @@ impl QueryMode {
             Self::Selection => {
                 let query_fn = ctx.tree().ids.get(index);
                 query_fn(ctx.view(), arguments, &mut |iter| {
-                    for topic_value in iter {
+                    'values: for topic_value in iter {
                         lex.truncate(lex_len);
                         if !pattern.try_apply(ctx, &mut lex, &topic_value) {
-                            return Outcome::Failure;
+                            continue 'values;
                         }
                         let result = eval_sequence(ctx, &mut lex, branches);
                         if result.is_non_failure() {
