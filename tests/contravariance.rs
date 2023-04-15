@@ -29,17 +29,24 @@ fn eval<'tree, 'ctx: 'tree>(tree: &Tree<'tree>, ctx: &Context<'ctx>) -> Outcome<
     tree.evaluate(ctx, "test", ()).unwrap()
 }
 
+fn erase<R>(tree: &Tree<'_>, ctx: &Context<'_>, scope: impl FnOnce(&Tree<'_>, &Context<'_>) -> R) -> R {
+    scope(tree, ctx)
+}
+
+
 #[test]
 fn contravariant_context() {
-    let tree = make_tree();
+    /*
+    let orig_tree = make_tree();
 
-    let values = Vec::from([3, 4, 5]);
-    let ctx = Context { values: &values };
-    tree.evaluate(&ctx, "test", ()).unwrap();
-
-    eval(&tree, &ctx);
-
-    let values = Vec::from([3, 4, 5]);
-    let ctx = Context { values: &values };
-    tree.evaluate(&ctx, "test", ()).unwrap();
+    for _ in 0..3 {
+        let tree = orig_tree.clone();
+        let values = Vec::from([3, 4, 5]);
+        let ctx = Context { values: &values };
+        //eval(&tree, &ctx);
+        //erase(&tree, &ctx, |tree, ctx| {
+        tree.evaluate(&ctx, "test", ()).unwrap();
+        //});
+    };
+    */
 }

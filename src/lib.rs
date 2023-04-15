@@ -1,8 +1,42 @@
 
+/*
+pub trait Token {
+    type Ref<'a>;
+}
+
+pub trait Access<Acc>
+where
+    Acc: Token,
+{
+    fn access(&self) -> Acc::Ref<'_>;
+}
+
+struct Tree<Acc: Token> {
+    conditions: Vec<fn(Acc::Ref<'_>) -> bool>,
+}
+
+
+struct Test<'a> {
+    v: fn(&'a i32) -> bool,
+}
+
+impl Test<'_> {
+
+}
+*/
+
+
+
+
+
+
+
+
 mod gen;
 mod str;
 mod value;
 mod tree;
+
 
 pub use self::{
     value::{ExtValue, Value, Values, IntoValues, TryFromValues},
@@ -26,6 +60,8 @@ pub use self::{
         },
     },
 };
+
+
 
 #[macro_export]
 macro_rules! cond_fn {
