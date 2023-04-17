@@ -59,7 +59,7 @@ impl<Ext, Eff> From<bool> for Outcome<Ext, Eff> {
     }
 }
 
-#[derive(Derivative, Debug, PartialEq)]
+#[derive(Derivative, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derivative(Clone(bound=""))]
 pub struct Action<Ext, Eff> {
     index: ActionIdx,
