@@ -34,6 +34,10 @@ impl<Ext: std::fmt::Debug> std::fmt::Debug for Value<Ext> {
 }
 
 impl<Ext> Value<Ext> {
+    pub fn is_str(&self, s: &str) -> bool {
+        self.symbol().map_or(false, |sym| sym == s)
+    }
+
     fn_enum_is_variant!(pub is_symbol, Symbol);
     fn_enum_is_variant!(pub is_int, Int);
     fn_enum_is_variant!(pub is_float, Float);
