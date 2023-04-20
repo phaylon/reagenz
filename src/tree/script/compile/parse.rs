@@ -56,7 +56,7 @@ pub(super) fn try_parse_label_directive(
     }
 }
 
-fn try_parse_keyword_directive<'a>(
+pub(super) fn try_parse_keyword_directive<'a>(
     node: &'a ScriptNode,
     keyword: &'static str,
 ) -> ScriptResult<Option<&'a [Item]>> {

@@ -4,9 +4,10 @@ use smol_str::SmolStr;
 use treelang::Indent;
 
 use crate::str::{is_variable, is_symbol};
+use crate::tree::SeedIdx;
 use crate::tree::id_space::{QueryIdx, CondIdx};
 
-use super::{BehaviorTree, GlobalFn, EffectFn, QueryFn, CondFn};
+use super::{BehaviorTree, GlobalFn, EffectFn, QueryFn, CondFn, SeedFn};
 use super::id_space::{IdSpace, GlobalIdx, EffectIdx};
 use super::script::{ScriptSource, Compiler, CompileResult};
 
@@ -28,6 +29,19 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
         let prev = self.ids.set::<GlobalIdx>(id.clone(), handler, 0).err();
         if let Some(kind) = prev {
             panic!("global id `{id}` was already used for {kind}");
+        }
+    }
+
+    #[track_caller]
+    pub fn register_seed<N>(&mut self, id: N, handler: SeedFn<Ctx>)
+    where
+        N: Into<SmolStr>,
+    {
+        let id = id.into();
+        assert!(is_symbol(&id), "seed id `{id}` is not a valid symbol");
+        let prev = self.ids.set::<SeedIdx>(id.clone(), handler, 0).err();
+        if let Some(kind) = prev {
+            panic!("seed id `{id}` was already used for {kind}");
         }
     }
 

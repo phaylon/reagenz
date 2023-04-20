@@ -1,9 +1,10 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
+use fastrand::Rng;
 use smallvec::SmallVec;
 
-use crate::tree::RefIdx;
+use crate::tree::{RefIdx, SeedIdx};
 use crate::{Outcome, Action};
 use crate::tree::context::Context;
 use crate::tree::id_space::{EffectIdx, GlobalIdx, QueryIdx, ActionIdx, NodeIdx};
@@ -17,6 +18,8 @@ pub type Patterns<Ext> = Arc<[Pattern<Ext>]>;
 
 type Lex<Ext> = SmallVec<[Value<Ext>; 8]>;
 type Args<Ext> = SmallVec<[Value<Ext>; 4]>;
+
+type Seeds = Arc<[SeedIdx]>;
 
 #[derive(Debug, Clone)]
 pub struct ActionRoot<Ext> {
@@ -173,6 +176,7 @@ pub enum Node<Ext> {
     Ref(RefIdx, RefMode, ProtoValues<Ext>),
     Query(Pattern<Ext>, QueryIdx, ProtoValues<Ext>, QueryMode, Nodes<Ext>),
     Match(ProtoValues<Ext>, Patterns<Ext>, Nodes<Ext>),
+    Random(u64, Seeds, Nodes<Ext>),
 }
 
 impl<Ext> Node<Ext> {
@@ -206,6 +210,17 @@ impl<Ext> Node<Ext> {
             Self::Query(pattern, index, arguments, mode, branches) => {
                 let arguments: Args<Ext> = reify_values(ctx, lex, arguments.iter());
                 mode.eval_query(ctx, lex, *index, &arguments, pattern, branches)
+            },
+            Self::Random(seed, ctx_seeds, branches) => {
+                let mut branches: SmallVec::<[_; 16]> = branches.iter().cloned().collect();
+                let mut seed = *seed;
+                for ctx_seed in ctx_seeds.iter() {
+                    let ctx_seed = ctx.tree().ids.get(*ctx_seed)(ctx.view());
+                    seed = seed.wrapping_add(ctx_seed);
+                }
+                let rng = Rng::with_seed(seed);
+                rng.shuffle(&mut branches);
+                eval_selection(ctx, lex, &branches)
             },
         }
     }
@@ -262,13 +277,25 @@ impl RefMode {
 fn eval_sequence<C, Ctx, Ext, Eff>(
     ctx: &C,
     lex: &mut Lex<Ext>,
-    nodes: &Nodes<Ext>,
+    nodes: &[Node<Ext>],
 ) -> Outcome<Ext, Eff>
 where
     C: Context<Ctx, Ext, Eff>,
     Ext: Clone + PartialEq,
 {
     Dispatch::Sequence.eval_branches(ctx, lex, nodes)
+}
+
+fn eval_selection<C, Ctx, Ext, Eff>(
+    ctx: &C,
+    lex: &mut Lex<Ext>,
+    nodes: &[Node<Ext>],
+) -> Outcome<Ext, Eff>
+where
+    C: Context<Ctx, Ext, Eff>,
+    Ext: Clone + PartialEq,
+{
+    Dispatch::Selection.eval_branches(ctx, lex, nodes)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

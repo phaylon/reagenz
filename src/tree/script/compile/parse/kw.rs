@@ -16,6 +16,7 @@ pub mod dir {
     pub const NONE: &str = "none";
     pub const VISIT: &str = "visit";
     pub const MATCH: &str = "match";
+    pub const RANDOM: &str = "random";
 
     pub mod query {
         pub const SELECT: &str = "for-any";

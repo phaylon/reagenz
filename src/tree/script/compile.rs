@@ -69,6 +69,8 @@ pub enum ScriptError {
     InvalidQueryRef,
     #[error("Invalid effect reference")]
     InvalidEffectRef,
+    #[error("Invalid seed reference")]
+    InvalidSeedRef,
     #[error("Variable `{name}` shadows existing lexical")]
     ShadowedLexical { name: SmolStr },
     #[error("Variable `{name}` shadows existing global")]

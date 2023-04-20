@@ -18,6 +18,7 @@ flagnum = { git = "https://github.com/phaylon/flagnum", version = "0.1.0" }
 src-ctx = { git = "https://github.com/phaylon/src-ctx", version = "0.1.0" }
 serde = { version = "1.0.159", features = ["derive", "rc"] }
 ordered-float = { version = "3.6.0", features = ["serde"] }
+fastrand = "1.9.0"
 
 [dev-dependencies]
 assert_matches = "1.5.0"

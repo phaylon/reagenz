@@ -17,6 +17,7 @@ pub type QueryFn<Ctx, Ext, Eff> = fn(
 pub type GlobalFn<Ctx, Ext> = fn(&Ctx) -> Value<Ext>;
 pub type EffectFn<Ctx, Ext, Eff> = fn(&Ctx, &[Value<Ext>]) -> Option<Eff>;
 pub type CondFn<Ctx, Ext> = fn(&Ctx, &[Value<Ext>]) -> bool;
+pub type SeedFn<Ctx> = fn(&Ctx) -> u64;
 
 macro_rules! generate {
     {
@@ -102,6 +103,7 @@ generate! {
     globals: Global/GlobalIdx (GlobalFn<Ctx, Ext>, usize) => "a global",
     effects: Effect/EffectIdx (EffectFn<Ctx, Ext, Eff>, usize) => "an effect",
     conditions: Cond/CondIdx (CondFn<Ctx, Ext>, usize) => "a condition",
+    seeds: Seed/SeedIdx (SeedFn<Ctx>, usize) => "an rng seed",
     queries: Query/QueryIdx (QueryFn<Ctx, Ext, Eff>, usize) => "a query",
     action_roots: Action/ActionIdx (Arc<ActionRoot<Ext>>, usize) => "an action",
     node_roots: Node/NodeIdx (Arc<NodeRoot<Ext>>, usize) => "a node",

@@ -14,7 +14,7 @@ use crate::value::Value;
 
 use super::parse::{
     Var, ItemValue, kw, try_parse_label_directive, match_ref, Sym, match_var, match_sym,
-    match_directive,
+    match_directive, try_parse_keyword_directive,
 };
 use super::{Root, Decl, ScriptResult, ScriptError, RefClass};
 
@@ -132,6 +132,31 @@ where
         compiled.push(compile_branch(env, node)?);
     }
     Ok(compiled.into())
+}
+
+fn try_compile_branch_random<Ctx, Ext, Eff>(
+    env: &mut Env<'_, Ctx, Ext, Eff>,
+    node: &ScriptNode,
+) -> ScriptResult<Option<Node<Ext>>> {
+    if let Some(seeds) = try_parse_keyword_directive(node, kw::dir::RANDOM)? {
+        let mut ctx_seeds = Vec::new();
+        for seed in seeds {
+            let Some(name) = match_sym(seed) else {
+                return Err(SourceError::new(
+                    ScriptError::InvalidSeedRef,
+                    seed.location.start(),
+                    "expected seed reference",
+                ));
+            };
+            let index = env.ids().resolve(name.as_str(), 0)
+                .map_err(|error| convert_id_error(&name, error))?;
+            ctx_seeds.push(index);
+        }
+        let branches = compile_branches(env, node.children())?;
+        Ok(Some(Node::Random(fastrand::u64(..), ctx_seeds.into(), branches)))
+    } else {
+        Ok(None)
+    }
 }
 
 fn try_compile_branch_dispatch<Ctx, Ext, Eff>(
@@ -265,6 +290,8 @@ fn compile_branch<Ctx, Ext, Eff>(
     } else if let Some(compiled) = try_compile_branch_match(env, node)? {
         Ok(compiled)
     } else if let Some(compiled) = try_compile_branch_query(env, node)? {
+        Ok(compiled)
+    } else if let Some(compiled) = try_compile_branch_random(env, node)? {
         Ok(compiled)
     } else {
         Err(SourceError::new(ScriptError::UnrecognizedNode, node.location, "expected logic node"))
