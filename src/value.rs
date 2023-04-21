@@ -34,6 +34,10 @@ impl<Ext: std::fmt::Debug> std::fmt::Debug for Value<Ext> {
 }
 
 impl<Ext> Value<Ext> {
+    pub const fn from_str(s: &str) -> Self {
+        Self::Symbol(SmolStr::new_inline(s))
+    }
+
     pub fn is_str(&self, s: &str) -> bool {
         self.symbol().map_or(false, |sym| sym == s)
     }
