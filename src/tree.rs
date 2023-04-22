@@ -45,6 +45,7 @@ where
             RefIdx::Action(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
             RefIdx::Node(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
             RefIdx::Cond(index) => Ok(self.ids.get(index)(view, &arguments).into()),
+            RefIdx::Custom(index) => Ok(self.ids.get(index)(view, &arguments, self)),
         }
     }
 

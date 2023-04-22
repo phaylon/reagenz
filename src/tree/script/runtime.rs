@@ -252,6 +252,10 @@ impl RefIdx {
             Self::Node(index) => {
                 ctx.tree().ids.get(*index).eval(ctx.as_ref(), arguments)
             },
+            Self::Custom(index) => {
+                let node = ctx.tree().ids.get(*index);
+                node(ctx.view(), arguments, ctx.tree())
+            },
         }
     }
 }

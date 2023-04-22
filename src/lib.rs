@@ -1,36 +1,4 @@
 
-/*
-pub trait Token {
-    type Ref<'a>;
-}
-
-pub trait Access<Acc>
-where
-    Acc: Token,
-{
-    fn access(&self) -> Acc::Ref<'_>;
-}
-
-struct Tree<Acc: Token> {
-    conditions: Vec<fn(Acc::Ref<'_>) -> bool>,
-}
-
-
-struct Test<'a> {
-    v: fn(&'a i32) -> bool,
-}
-
-impl Test<'_> {
-
-}
-*/
-
-
-
-
-
-
-
 
 mod gen;
 mod str;
@@ -61,7 +29,25 @@ pub use self::{
     },
 };
 
-
+#[macro_export]
+macro_rules! custom_fn {
+    (
+        $ctx:pat, $tree:pat $( , $arg:ident : $arg_ty:ty )*
+        => $body:expr $(,)?
+    ) => {
+        ($crate::__count_usize!($($arg)*), |$ctx, args: &[$crate::Value<_>], $tree| {
+            let args = args.iter().cloned();
+            let args: ($($arg_ty,)*) = match $crate::TryFromValues::try_from_values(args) {
+                Some(values) => values,
+                None => {
+                    return $crate::Outcome::Failure;
+                },
+            };
+            let ($($arg,)*): ($($arg_ty,)*) = args;
+            $body
+        })
+    }
+}
 
 #[macro_export]
 macro_rules! cond_fn {

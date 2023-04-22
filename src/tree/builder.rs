@@ -4,10 +4,10 @@ use smol_str::SmolStr;
 use treelang::Indent;
 
 use crate::str::{is_variable, is_symbol};
-use crate::tree::SeedIdx;
+use crate::tree::{SeedIdx, CustomIdx};
 use crate::tree::id_space::{QueryIdx, CondIdx};
 
-use super::{BehaviorTree, GlobalFn, EffectFn, QueryFn, CondFn, SeedFn};
+use super::{BehaviorTree, GlobalFn, EffectFn, QueryFn, CondFn, SeedFn, CustomFn};
 use super::id_space::{IdSpace, GlobalIdx, EffectIdx};
 use super::script::{ScriptSource, Compiler, CompileResult};
 
@@ -84,6 +84,20 @@ impl<Ctx, Ext, Eff> BehaviorTreeBuilder<Ctx, Ext, Eff> {
         let prev = self.ids.set::<CondIdx>(id.clone(), handler, arity).err();
         if let Some(kind) = prev {
             panic!("condition id `{id}` was already used for {kind}");
+        }
+    }
+
+    #[track_caller]
+    pub fn register_custom<N>(&mut self, id: N, (arity, handler): (usize, CustomFn<Ctx, Ext, Eff>))
+    where
+        N: Into<SmolStr>,
+        Ext: Clone,
+    {
+        let id = id.into();
+        assert!(is_symbol(&id), "custom node id `{id}` is not a valid symbol");
+        let prev = self.ids.set::<CustomIdx>(id.clone(), handler, arity).err();
+        if let Some(kind) = prev {
+            panic!("custom node id `{id}` was already used for {kind}");
         }
     }
 

@@ -1,4 +1,4 @@
-use reagenz::{BehaviorTreeBuilder, Outcome, effect_fn, cond_fn, query_fn};
+use reagenz::{BehaviorTreeBuilder, Outcome, effect_fn, cond_fn, query_fn, custom_fn};
 use src_ctx::normalize;
 use treelang::{Indent};
 use assert_matches::assert_matches;
@@ -42,6 +42,15 @@ fn effects() {
 fn conditions() {
     let mut tree = BehaviorTreeBuilder::<(), (), ()>::default();
     tree.register_condition("test", cond_fn!(_, value: i32 => value == 23));
+    let tree = tree.compile_str(INDENT, "test", "").unwrap();
+    assert_eq!(tree.evaluate(&(), "test", [23]), Ok(Outcome::Success));
+    assert_eq!(tree.evaluate(&(), "test", [42]), Ok(Outcome::Failure));
+}
+
+#[test]
+fn custom_nodes() {
+    let mut tree = BehaviorTreeBuilder::<(), (), ()>::default();
+    tree.register_custom("test", custom_fn!(_, _, value: i32 => (value == 23).into()));
     let tree = tree.compile_str(INDENT, "test", "").unwrap();
     assert_eq!(tree.evaluate(&(), "test", [23]), Ok(Outcome::Success));
     assert_eq!(tree.evaluate(&(), "test", [42]), Ok(Outcome::Failure));

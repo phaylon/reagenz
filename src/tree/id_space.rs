@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use smol_str::SmolStr;
 
+use crate::BehaviorTree;
 use crate::value::Value;
 
 use super::{Index, IdMap, KindError, ArityError};
@@ -17,6 +18,11 @@ pub type QueryFn<Ctx, Ext, Eff> = fn(
 pub type GlobalFn<Ctx, Ext> = fn(&Ctx) -> Value<Ext>;
 pub type EffectFn<Ctx, Ext, Eff> = fn(&Ctx, &[Value<Ext>]) -> Option<Eff>;
 pub type CondFn<Ctx, Ext> = fn(&Ctx, &[Value<Ext>]) -> bool;
+pub type CustomFn<Ctx, Ext, Eff> = fn(
+    &Ctx,
+    &[Value<Ext>],
+    &BehaviorTree<Ctx, Ext, Eff>,
+) -> Outcome<Ext, Eff>;
 pub type SeedFn<Ctx> = fn(&Ctx) -> u64;
 
 macro_rules! generate {
@@ -103,6 +109,7 @@ generate! {
     globals: Global/GlobalIdx (GlobalFn<Ctx, Ext>, usize) => "a global",
     effects: Effect/EffectIdx (EffectFn<Ctx, Ext, Eff>, usize) => "an effect",
     conditions: Cond/CondIdx (CondFn<Ctx, Ext>, usize) => "a condition",
+    customs: Custom/CustomIdx (CustomFn<Ctx, Ext, Eff>, usize) => "a custom node",
     seeds: Seed/SeedIdx (SeedFn<Ctx>, usize) => "an rng seed",
     queries: Query/QueryIdx (QueryFn<Ctx, Ext, Eff>, usize) => "a query",
     action_roots: Action/ActionIdx (Arc<ActionRoot<Ext>>, usize) => "an action",
@@ -123,6 +130,7 @@ impl<Ctx, Ext, Eff> IdSpace<Ctx, Ext, Eff> {
                 Kind::Action => self.resolve(name, given).map(RefIdx::Action),
                 Kind::Node => self.resolve(name, given).map(RefIdx::Node),
                 Kind::Cond => self.resolve(name, given).map(RefIdx::Cond),
+                Kind::Custom => self.resolve(name, given).map(RefIdx::Custom),
                 other => Err(IdError::Kind(KindError {
                     expected: [Kind::Action, Kind::Node, Kind::Cond].into(),
                     given: other,
@@ -230,6 +238,7 @@ pub enum RefIdx {
     Action(ActionIdx),
     Node(NodeIdx),
     Cond(CondIdx),
+    Custom(CustomIdx),
 }
 
 pub trait IdSpaceIndex<Ctx, Ext, Eff>: From<Index> + Into<Index> {
