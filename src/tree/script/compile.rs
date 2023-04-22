@@ -71,6 +71,8 @@ pub enum ScriptError {
     InvalidEffectRef,
     #[error("Invalid seed reference")]
     InvalidSeedRef,
+    #[error("Invalid switch case node")]
+    InvalidSwitchCase,
     #[error("Variable `{name}` shadows existing lexical")]
     ShadowedLexical { name: SmolStr },
     #[error("Variable `{name}` shadows existing global")]

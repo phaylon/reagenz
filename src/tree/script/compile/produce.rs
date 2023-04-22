@@ -14,7 +14,7 @@ use crate::value::Value;
 
 use super::parse::{
     Var, ItemValue, kw, try_parse_label_directive, match_ref, Sym, match_var, match_sym,
-    match_directive, try_parse_keyword_directive,
+    match_directive, try_parse_keyword_directive, match_wildcard,
 };
 use super::{Root, Decl, ScriptResult, ScriptError, RefClass};
 
@@ -213,6 +213,43 @@ fn try_compile_branch_ref<Ctx, Ext, Eff>(
     Ok(None)
 }
 
+fn try_compile_branch_switch<Ctx, Ext, Eff>(
+    env: &mut Env<'_, Ctx, Ext, Eff>,
+    node: &ScriptNode,
+) -> ScriptResult<Option<Node<Ext>>> {
+    if let Some(targets) = try_parse_keyword_directive(node, kw::dir::switch::SWITCH)? {
+        let mut cases = Vec::new();
+        for child in node.children() {
+            if let Some(patterns) = try_parse_keyword_directive(child, kw::dir::switch::CASE)? {
+                if targets.len() != patterns.len() {
+                    return Err(SourceError::new(
+                        ScriptError::PatternArity {
+                            error: ArityError { expected: targets.len(), given: patterns.len() },
+                        },
+                        child.location,
+                        "switch case with arity mismatch",
+                    ));
+                }
+                env.scope([], |env| {
+                    let targets = compile_values(env, targets)?;
+                    let patterns = compile_pattern_items(env, patterns)?;
+                    let branches = compile_branches(env, child.children())?;
+                    cases.push(Node::Match(targets, patterns, branches));
+                    Ok(())
+                })?;
+            } else {
+                return Err(SourceError::new(
+                    ScriptError::InvalidSwitchCase,
+                    child.location,
+                    "expected switch case node",
+                ));
+            }
+        }
+        return Ok(Some(Node::Dispatch(Dispatch::Selection, cases.into())));
+    }
+    Ok(None)
+}
+
 fn try_compile_branch_match<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
@@ -289,6 +326,8 @@ fn compile_branch<Ctx, Ext, Eff>(
         Ok(compiled)
     } else if let Some(compiled) = try_compile_branch_match(env, node)? {
         Ok(compiled)
+    } else if let Some(compiled) = try_compile_branch_switch(env, node)? {
+        Ok(compiled)
     } else if let Some(compiled) = try_compile_branch_query(env, node)? {
         Ok(compiled)
     } else if let Some(compiled) = try_compile_branch_random(env, node)? {
@@ -336,7 +375,9 @@ fn compile_pattern_item<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     item: &Item,
 ) -> ScriptResult<Pattern<Ext>> {
-    if let Some(var) = match_var(item) {
+    if match_wildcard(item) {
+        Ok(Pattern::Ignore)
+    } else if let Some(var) = match_var(item) {
         Ok(env.resolve_pattern(&var))
     } else if let Some(sym) = match_sym(item) {
         Ok(Pattern::Exact(sym.to_smol_str().into()))

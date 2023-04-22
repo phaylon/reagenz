@@ -25,4 +25,9 @@ pub mod dir {
         pub const LAST: &str = "with-last";
         pub const VISIT: &str = "visit-every";
     }
+
+    pub mod switch {
+        pub const SWITCH: &str = "switch";
+        pub const CASE: &str = "case";
+    }
 }

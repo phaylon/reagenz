@@ -96,6 +96,34 @@ fn queries() {
 }
 
 #[test]
+fn switch_cases() {
+    let mut tree = BehaviorTreeBuilder::<&[[i32; 2]], (), i32>::default();
+    tree.register_condition("fail", cond_fn!(_ => false));
+    tree.register_condition("eq", cond_fn!(_, a: i32, b: i32 => a == b));
+    let tree = tree.compile_str(INDENT, "test", &normalize("
+        |node: test $v
+        |  switch: $v
+        |    case: 23
+        |    case: 42
+        |      fail
+        |    case: $
+        |      eq? $v 66
+    ")).unwrap();
+    assert_matches!(
+        tree.evaluate(&&[][..], "test", (23,)),
+        Ok(Outcome::Success)
+    );
+    assert_matches!(
+        tree.evaluate(&&[][..], "test", (42,)),
+        Ok(Outcome::Failure)
+    );
+    assert_matches!(
+        tree.evaluate(&&[][..], "test", (66,)),
+        Ok(Outcome::Success)
+    );
+}
+
+#[test]
 fn patterns() {
     let mut tree = BehaviorTreeBuilder::<&[[i32; 2]], (), (i32, i32)>::default();
     tree.register_global("$global", |_| 123.into());

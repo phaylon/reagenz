@@ -143,6 +143,10 @@ pub(super) fn match_var(item: &Item) -> Option<ItemValue<Var>> {
     }
 }
 
+pub(super) fn match_wildcard(item: &Item) -> bool {
+    item.word_str().map_or(false, |s| s == "$")
+}
+
 #[derive(Debug, Clone)]
 pub struct ItemValue<T> {
     pub value: T,

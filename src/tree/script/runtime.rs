@@ -465,6 +465,7 @@ pub enum Pattern<Ext> {
     Lexical(usize),
     Global(GlobalIdx),
     List(Patterns<Ext>),
+    Ignore,
 }
 
 impl<Ext> Pattern<Ext> {
@@ -479,6 +480,7 @@ impl<Ext> Pattern<Ext> {
         Ext: Clone + PartialEq,
     {
         match self {
+            Self::Ignore => true,
             Self::Bind => {
                 lex.push(value.clone());
                 true
