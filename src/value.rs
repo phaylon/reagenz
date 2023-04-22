@@ -198,6 +198,18 @@ where
     }
 }
 
+impl<Ext, T> IntoValues<Ext> for &[T]
+where
+    T: Clone + Into<Value<Ext>>,
+{
+    fn into_values<C>(self) -> C
+    where
+        C: FromIterator<Value<Ext>>,
+    {
+        self.iter().cloned().map(Into::into).collect()
+    }
+}
+
 macro_rules! impl_tuple_into_values_next {
     () => {};
     ($first:ident $($rest:ident)*) => {
