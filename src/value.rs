@@ -58,6 +58,13 @@ impl<Ext> Value<Ext> {
         prefix.iter().zip(values.iter()).all(|(a, b)| a == b)
     }
 
+    pub fn contains(&self, other: &Self) -> bool
+    where
+        Ext: PartialEq,
+    {
+        self == other || self.list().map_or(false, |items| items.iter().any(|it| it.contains(other)))
+    }
+
     fn_enum_is_variant!(pub is_symbol, Symbol);
     fn_enum_is_variant!(pub is_int, Int);
     fn_enum_is_variant!(pub is_float, Float);
