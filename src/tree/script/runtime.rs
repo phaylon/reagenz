@@ -254,7 +254,7 @@ impl RefIdx {
             },
             Self::Custom(index) => {
                 let node = ctx.tree().ids.get(*index);
-                node(ctx.view(), arguments, ctx.tree())
+                node(ctx.view(), arguments, ctx.tree(), ctx.is_active())
             },
         }
     }

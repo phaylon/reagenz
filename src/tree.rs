@@ -7,9 +7,9 @@ use smallvec::SmallVec;
 use smol_str::SmolStr;
 
 use crate::value::IntoValues;
-use crate::{Outcome, Action};
+use crate::{Outcome, Action, Value};
 
-use self::context::{EvalContext, DiscoveryContext};
+use self::context::{EvalContext, DiscoveryContext, Context};
 
 
 pub mod outcome;
@@ -30,6 +30,20 @@ impl<Ctx, Ext, Eff> BehaviorTree<Ctx, Ext, Eff>
 where
     Ext: Clone + PartialEq,
 {
+    fn eval_node(
+        &self,
+        ctx: EvalContext<Ctx, Ext, Eff>,
+        node: &str,
+        arguments: &[Value<Ext>],
+    ) -> Result<Outcome<Ext, Eff>, IdError> {
+        match self.ids.resolve_ref(node, arguments.len())? {
+            RefIdx::Action(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
+            RefIdx::Node(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
+            RefIdx::Cond(index) => Ok(self.ids.get(index)(ctx.view(), &arguments).into()),
+            RefIdx::Custom(index) => Ok(self.ids.get(index)(ctx.view(), &arguments, self, true)),
+        }
+    }
+
     pub fn evaluate<A>(
         &self,
         view: &Ctx,
@@ -41,12 +55,21 @@ where
     {
         let ctx = EvalContext::new(view, self);
         let arguments: SmallVec<[_; 8]> = arguments.into_values();
-        match self.ids.resolve_ref(root, arguments.len())? {
-            RefIdx::Action(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
-            RefIdx::Node(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
-            RefIdx::Cond(index) => Ok(self.ids.get(index)(view, &arguments).into()),
-            RefIdx::Custom(index) => Ok(self.ids.get(index)(view, &arguments, self)),
-        }
+        self.eval_node(ctx, root, &arguments)
+    }
+
+    pub fn check<A>(
+        &self,
+        view: &Ctx,
+        root: &str,
+        arguments: A,
+    ) -> Result<Outcome<Ext, Eff>, IdError>
+    where
+        A: IntoValues<Ext>,
+    {
+        let ctx = EvalContext::new(view, self).to_inactive();
+        let arguments: SmallVec<[_; 8]> = arguments.into_values();
+        self.eval_node(ctx, root, &arguments[..])
     }
 
     pub fn discover_all<C>(&self, view: &Ctx, collection: &mut C)

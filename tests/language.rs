@@ -50,7 +50,7 @@ fn conditions() {
 #[test]
 fn custom_nodes() {
     let mut tree = BehaviorTreeBuilder::<(), (), ()>::default();
-    tree.register_custom("custom-test", custom_fn!(_, _, value: i32 => (value == 23).into()));
+    tree.register_custom("custom-test", custom_fn!(_, _, _, value: i32 => (value == 23).into()));
     let tree = tree.compile_str(INDENT, "test", &normalize("
         |node: test $v
         |  custom-test $v

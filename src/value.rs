@@ -42,6 +42,22 @@ impl<Ext> Value<Ext> {
         self.symbol().map_or(false, |sym| sym == s)
     }
 
+    pub fn matches_prefix(&self, prefix: &Self) -> bool
+    where
+        Ext: PartialEq,
+    {
+        let Some(values) = self.list() else {
+            return false;
+        };
+        let Some(prefix) = prefix.list() else {
+            return false;
+        };
+        if prefix.len() > values.len() {
+            return false;
+        }
+        prefix.iter().zip(values.iter()).all(|(a, b)| a == b)
+    }
+
     fn_enum_is_variant!(pub is_symbol, Symbol);
     fn_enum_is_variant!(pub is_int, Int);
     fn_enum_is_variant!(pub is_float, Float);

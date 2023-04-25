@@ -22,6 +22,7 @@ pub type CustomFn<Ctx, Ext, Eff> = fn(
     &Ctx,
     &[Value<Ext>],
     &BehaviorTree<Ctx, Ext, Eff>,
+    bool,
 ) -> Outcome<Ext, Eff>;
 pub type SeedFn<Ctx> = fn(&Ctx) -> u64;
 

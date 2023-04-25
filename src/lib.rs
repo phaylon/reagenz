@@ -32,10 +32,10 @@ pub use self::{
 #[macro_export]
 macro_rules! custom_fn {
     (
-        $ctx:pat, $tree:pat $( , $arg:ident : $arg_ty:ty )*
+        $ctx:pat, $tree:pat, $is_active:pat $( , $arg:ident : $arg_ty:ty )*
         => $body:expr $(,)?
     ) => {
-        ($crate::__count_usize!($($arg)*), |$ctx, args: &[$crate::Value<_>], $tree| {
+        ($crate::__count_usize!($($arg)*), |$ctx, args: &[$crate::Value<_>], $tree, $is_active| {
             let args = args.iter().cloned();
             let args: ($($arg_ty,)*) = match $crate::TryFromValues::try_from_values(args) {
                 Some(values) => values,
