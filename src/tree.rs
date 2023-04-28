@@ -9,7 +9,7 @@ use smol_str::SmolStr;
 use crate::value::IntoValues;
 use crate::{Outcome, Action, Value};
 
-use self::context::{EvalContext, DiscoveryContext, Context};
+use self::context::{EvalContext, DiscoveryContext, Context, ContextCache};
 
 
 pub mod outcome;
@@ -77,8 +77,9 @@ where
         C: Extend<Action<Ext, Eff>>,
     {
         let collection = RefCell::new(collection);
+        let cache = ContextCache::default();
         for index in self.ids.actions() {
-            let ctx = DiscoveryContext::new(view, self, &collection, index);
+            let ctx = DiscoveryContext::new(view, self, &collection, index, cache.clone());
             self.ids.get(index).eval_discovery_nodes(&ctx);
         }
     }
@@ -88,8 +89,9 @@ where
         C: Extend<Action<Ext, Eff>>,
     {
         let collection = RefCell::new(collection);
+        let cache = ContextCache::default();
         let index = self.ids.action(action)?;
-        let ctx = DiscoveryContext::new(view, self, &collection, index);
+        let ctx = DiscoveryContext::new(view, self, &collection, index, cache);
         self.ids.get(index).eval_discovery_nodes(&ctx);
         Ok(())
     }

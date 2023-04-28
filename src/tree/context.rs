@@ -8,6 +8,8 @@ use super::{BehaviorTree, ActionIdx, RefIdx};
 use super::outcome::{Action, Outcome};
 
 
+const LRU_LEN: usize = 4096;
+
 pub trait Context<Ctx, Ext, Eff>: Sized + Clone {
     fn view(&self) -> &Ctx;
 
@@ -115,8 +117,9 @@ impl<'ctx, 'coll, Ctx, Ext, Eff, C> DiscoveryContext<'ctx, 'coll, Ctx, Ext, Eff,
         tree: &'ctx BehaviorTree<Ctx, Ext, Eff>,
         collection: &'ctx RefCell<&'coll mut C>,
         index: ActionIdx,
+        cache: ContextCache<Ext, Eff>,
     ) -> Self {
-        Self { view, tree, collection, index, cache: ContextCache::default() }
+        Self { view, tree, collection, index, cache }
     }
 }
 
@@ -193,7 +196,7 @@ where
                 arguments: arguments.into(),
                 outcome: outcome.clone(),
             });
-            lru.truncate(1024);
+            lru.truncate(LRU_LEN);
             outcome
         }
     }
@@ -201,7 +204,7 @@ where
 
 impl<Ext, Eff> Default for ContextCache<Ext, Eff> {
     fn default() -> Self {
-        Self { lru: Rc::new(RefCell::new(Vec::new())) }
+        Self { lru: Rc::new(RefCell::new(Vec::with_capacity(LRU_LEN + 1))) }
     }
 }
 
