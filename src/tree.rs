@@ -28,7 +28,7 @@ pub struct BehaviorTree<Ctx, Ext, Eff> {
 
 impl<Ctx, Ext, Eff> BehaviorTree<Ctx, Ext, Eff>
 where
-    Ext: Clone + PartialEq,
+    Ext: Clone + Eq + std::hash::Hash,
 {
     fn eval_node(
         &self,

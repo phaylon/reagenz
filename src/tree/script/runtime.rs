@@ -242,21 +242,23 @@ impl RefIdx {
         Ext: Clone + PartialEq,
     {
         let ctx = mode.apply(ctx);
-        match self {
-            Self::Action(index) => {
-                ctx.tree().ids.get(*index).eval(ctx.as_ref(), arguments)
-            },
-            Self::Cond(index) => {
-                ctx.tree().ids.get(*index)(ctx.view(), arguments).into()
-            },
-            Self::Node(index) => {
-                ctx.tree().ids.get(*index).eval(ctx.as_ref(), arguments)
-            },
-            Self::Custom(index) => {
-                let node = ctx.tree().ids.get(*index);
-                node(ctx.view(), arguments, ctx.tree(), ctx.is_active())
-            },
-        }
+        ctx.cache().get(*self, arguments, ctx.is_active(), || {
+            match self {
+                Self::Action(index) => {
+                    ctx.tree().ids.get(*index).eval(ctx.as_ref(), arguments)
+                },
+                Self::Cond(index) => {
+                    ctx.tree().ids.get(*index)(ctx.view(), arguments).into()
+                },
+                Self::Node(index) => {
+                    ctx.tree().ids.get(*index).eval(ctx.as_ref(), arguments)
+                },
+                Self::Custom(index) => {
+                    let node = ctx.tree().ids.get(*index);
+                    node(ctx.view(), arguments, ctx.tree(), ctx.is_active())
+                },
+            }
+        })
     }
 }
 

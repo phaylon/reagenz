@@ -234,7 +234,7 @@ impl std::fmt::Display for KindsDisplay {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RefIdx {
     Action(ActionIdx),
     Node(NodeIdx),
