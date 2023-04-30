@@ -422,25 +422,26 @@ impl QueryMode {
             Self::First => {
                 let query_fn = ctx.tree().ids.get(index);
                 query_fn(ctx.view(), arguments, &mut |iter| {
-                    let Some(topic_value) = iter.next() else {
-                        return Outcome::Failure;
-                    };
-                    if !pattern.try_apply(ctx, &mut lex, &topic_value) {
-                        return Outcome::Failure;
+                    'values: for topic_value in iter {
+                        if !pattern.try_apply(ctx, &mut lex, &topic_value) {
+                            continue 'values;
+                        }
+                        return eval_sequence(ctx, &mut lex, branches);
                     }
-                    eval_sequence(ctx, &mut lex, branches)
+                    Outcome::Failure
                 })
             },
             Self::Last => {
                 let query_fn = ctx.tree().ids.get(index);
                 query_fn(ctx.view(), arguments, &mut |iter| {
-                    let Some(topic_value) = iter.last() else {
-                        return Outcome::Failure;
-                    };
-                    if !pattern.try_apply(ctx, &mut lex, &topic_value) {
-                        return Outcome::Failure;
+                    let mut last = Outcome::Failure;
+                    'values: for topic_value in iter {
+                        if !pattern.try_apply(ctx, &mut lex, &topic_value) {
+                            continue 'values;
+                        }
+                        last = eval_sequence(ctx, &mut lex, branches);
                     }
-                    eval_sequence(ctx, &mut lex, branches)
+                    last
                 })
             },
             Self::Visit => {
