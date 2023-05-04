@@ -2,9 +2,10 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use fastrand::Rng;
+use log::trace;
 use smallvec::SmallVec;
 
-use crate::tree::{RefIdx, SeedIdx};
+use crate::tree::{RefIdx, SeedIdx, External, Effect};
 use crate::{Outcome, Action};
 use crate::tree::context::Context;
 use crate::tree::id_space::{EffectIdx, GlobalIdx, QueryIdx, ActionIdx, NodeIdx};
@@ -32,11 +33,12 @@ pub struct ActionRoot<Ext> {
 
 impl<Ext> ActionRoot<Ext>
 where
-    Ext: Clone + PartialEq,
+    Ext: External,
 {
     pub fn eval_discovery_nodes<C, Ctx, Eff>(&self, ctx: &C)
     where
         C: Context<Ctx, Ext, Eff>,
+        Eff: Effect,
     {
         let mut lex = Lex::with_capacity(self.lexicals);
         for node in self.discovery.iter() {
@@ -51,6 +53,7 @@ where
     ) -> Outcome<Ext, Eff>
     where
         C: Context<Ctx, Ext, Eff>,
+        Eff: Effect,
     {
         let mut lex = Lex::with_capacity(self.lexicals);
         lex.extend(arguments.iter().cloned());
@@ -80,6 +83,7 @@ where
     ) -> bool
     where
         C: Context<Ctx, Ext, Eff>,
+        Eff: Effect,
     {
         let ctx = ctx.to_inactive_if_active();
         eval_sequence(ctx.as_ref(), lex, &self.conditions).is_success()
@@ -107,7 +111,7 @@ pub struct NodeRoot<Ext> {
 
 impl<Ext> NodeRoot<Ext>
 where
-    Ext: Clone + PartialEq,
+    Ext: External,
 {
     pub fn eval<C, Ctx, Eff>(
         &self,
@@ -116,6 +120,7 @@ where
     ) -> Outcome<Ext, Eff>
     where
         C: Context<Ctx, Ext, Eff>,
+        Eff: Effect,
     {
         let mut lex = Lex::with_capacity(self.lexicals);
         lex.extend(arguments.iter().cloned());
@@ -183,7 +188,8 @@ impl<Ext> Node<Ext> {
     fn eval<C, Ctx, Eff>(&self, ctx: &C, lex: &mut Lex<Ext>) -> Outcome<Ext, Eff>
     where
         C: Context<Ctx, Ext, Eff>,
-        Ext: Clone + PartialEq,
+        Ext: External,
+        Eff: Effect,
     {
         match self {
             Self::Failure => Outcome::Failure,
@@ -239,8 +245,10 @@ impl RefIdx {
     ) -> Outcome<Ext, Eff>
     where
         C: Context<Ctx, Ext, Eff>,
-        Ext: Clone + PartialEq,
+        Ext: External,
+        Eff: Effect,
     {
+        trace!("node: {}{:?}", ctx.tree().ids.ref_name(*self), arguments);
         let ctx = mode.apply(ctx);
         ctx.cache().get(*self, arguments, ctx.is_active(), || {
             match self {
@@ -287,7 +295,8 @@ fn eval_sequence<C, Ctx, Ext, Eff>(
 ) -> Outcome<Ext, Eff>
 where
     C: Context<Ctx, Ext, Eff>,
-    Ext: Clone + PartialEq,
+    Ext: External,
+    Eff: Effect,
 {
     Dispatch::Sequence.eval_branches(ctx, lex, nodes)
 }
@@ -299,7 +308,8 @@ fn eval_selection<C, Ctx, Ext, Eff>(
 ) -> Outcome<Ext, Eff>
 where
     C: Context<Ctx, Ext, Eff>,
-    Ext: Clone + PartialEq,
+    Ext: External,
+    Eff: Effect,
 {
     Dispatch::Selection.eval_branches(ctx, lex, nodes)
 }
@@ -321,7 +331,8 @@ impl Dispatch {
     ) -> Outcome<Ext, Eff>
     where
         C: Context<Ctx, Ext, Eff>,
-        Ext: Clone + PartialEq,
+        Ext: External,
+        Eff: Effect,
     {
         match self {
             Dispatch::Sequence => 'eval: {
@@ -382,7 +393,8 @@ impl QueryMode {
     ) -> Outcome<Ext, Eff>
     where
         C: Context<Ctx, Ext, Eff>,
-        Ext: Clone + PartialEq,
+        Ext: External,
+        Eff: Effect,
     {
         let lex_len = lex.len();
         let mut lex = scopeguard::guard(lex, move |lex| lex.truncate(lex_len));

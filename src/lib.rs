@@ -11,6 +11,7 @@ pub use self::{
     str::{is_symbol, is_variable},
     tree::{
         BehaviorTree,
+        Effect, External,
         ArityError, KindError, IdError,
         Kind, Kinds, KindsDisplay,
         outcome::{

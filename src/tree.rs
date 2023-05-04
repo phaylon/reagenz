@@ -28,7 +28,8 @@ pub struct BehaviorTree<Ctx, Ext, Eff> {
 
 impl<Ctx, Ext, Eff> BehaviorTree<Ctx, Ext, Eff>
 where
-    Ext: Clone + Eq + std::hash::Hash,
+    Ext: External,
+    Eff: Effect,
 {
     fn eval_node(
         &self,
@@ -115,3 +116,9 @@ pub struct KindError {
     pub expected: Kinds,
     pub given: Kind,
 }
+
+pub trait Effect: Sized + Clone + Eq + std::hash::Hash + std::fmt::Debug + 'static {}
+impl<T: Sized + Clone + Eq + std::hash::Hash + std::fmt::Debug + 'static> Effect for T {}
+
+pub trait External:  Sized + Clone + Eq + std::hash::Hash + std::fmt::Debug + 'static {}
+impl<T: Sized + Clone + Eq + std::hash::Hash + std::fmt::Debug + 'static> External for T {}

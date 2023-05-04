@@ -165,6 +165,7 @@ pub struct ContextCache<Ext, Eff> {
 impl<Ext, Eff> ContextCache<Ext, Eff>
 where
     Ext: Clone + PartialEq,
+    Eff: Clone,
 {
     pub fn get<F>(
         &self,
@@ -176,28 +177,47 @@ where
     where
         F: FnOnce() -> Outcome<Ext, Eff>,
     {
-        let index = self.lru.borrow().iter().position(|cl| {
-            cl.index == ref_index
-                && cl.is_active == is_active
-                && cl.arguments == arguments
-        });
-        if let Some(index) = index {
-            let mut lru = self.lru.borrow_mut();
-            let cl = lru.remove(index);
+        if let Some(index) = self.find(ref_index, arguments, is_active) {
+            let cl = self.lru.borrow_mut().remove(index);
             let outcome = cl.outcome.clone();
-            lru.insert(0, cl);
+            self.insert(cl);
             outcome
         } else {
-            let outcome = calc_outcome();
-            let mut lru = self.lru.borrow_mut();
-            lru.insert(0, CacheLine {
+            let mut cl = CacheLine {
                 index: ref_index,
                 is_active,
                 arguments: arguments.into(),
-                outcome: outcome.clone(),
-            });
-            lru.truncate(LRU_LEN);
+                outcome: Outcome::Failure,
+            };
+            self.insert(cl.clone());
+            let outcome = calc_outcome();
+            cl.outcome = outcome.clone();
+            self.replace_or_insert(cl);
             outcome
+        }
+    }
+
+    fn find(&self, index: RefIdx, arguments: &[Value<Ext>], is_active: bool) -> Option<usize> {
+        self.lru.borrow().iter().position(|cl| {
+            cl.index == index
+                && cl.is_active == is_active
+                && cl.arguments == arguments
+        })
+    }
+
+    fn insert(&self, cl: CacheLine<Ext, Eff>) {
+        let mut lru = self.lru.borrow_mut();
+        lru.insert(0, cl);
+        lru.truncate(LRU_LEN);
+    }
+
+    fn replace_or_insert(&self, cl: CacheLine<Ext, Eff>) {
+        if let Some(index) = self.find(cl.index, &cl.arguments, cl.is_active) {
+            let mut lru = self.lru.borrow_mut();
+            lru.remove(index);
+            lru.insert(0, cl);
+        } else {
+            self.insert(cl);
         }
     }
 }
@@ -214,6 +234,7 @@ impl<Ext, Eff> Clone for ContextCache<Ext, Eff> {
     }
 }
 
+#[derive(Clone)]
 struct CacheLine<Ext, Eff> {
     index: RefIdx,
     is_active: bool,

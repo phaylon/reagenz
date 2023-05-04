@@ -160,6 +160,15 @@ impl<Ctx, Ext, Eff> IdSpace<Ctx, Ext, Eff> {
         ActionIdx::id_map(self).name(action.into()).expect("action must be valid in this tree")
     }
 
+    pub fn ref_name(&self, index: RefIdx) -> &SmolStr {
+        match index {
+            RefIdx::Action(index) => ActionIdx::id_map(self).name(index.into()),
+            RefIdx::Node(index) => NodeIdx::id_map(self).name(index.into()),
+            RefIdx::Cond(index) => CondIdx::id_map(self).name(index.into()),
+            RefIdx::Custom(index) => CustomIdx::id_map(self).name(index.into()),
+        }.expect("ref must be valid in this tree")
+    }
+
     pub fn resolve<Idx>(&self, name: &str, given: usize) -> Result<Idx, IdError>
     where
         Idx: IdSpaceIndex<Ctx, Ext, Eff>,
