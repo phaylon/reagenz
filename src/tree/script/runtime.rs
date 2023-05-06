@@ -181,7 +181,7 @@ pub enum Node<Ext> {
     Ref(RefIdx, RefMode, ProtoValues<Ext>),
     Query(Pattern<Ext>, QueryIdx, ProtoValues<Ext>, QueryMode, Nodes<Ext>),
     Match(ProtoValues<Ext>, Patterns<Ext>, Nodes<Ext>),
-    Random(u64, Seeds, Nodes<Ext>),
+    Random(u64, Seeds, Nodes<Ext>, bool),
 }
 
 impl<Ext> Node<Ext> {
@@ -217,7 +217,7 @@ impl<Ext> Node<Ext> {
                 let arguments: Args<Ext> = reify_values(ctx, lex, arguments.iter());
                 mode.eval_query(ctx, lex, *index, &arguments, pattern, branches)
             },
-            Self::Random(seed, ctx_seeds, branches) => {
+            Self::Random(seed, ctx_seeds, branches, check_any) => {
                 let mut branches: SmallVec::<[_; 16]> = branches.iter().cloned().collect();
                 let mut seed = *seed;
                 for ctx_seed in ctx_seeds.iter() {
@@ -226,7 +226,24 @@ impl<Ext> Node<Ext> {
                 }
                 let rng = Rng::with_seed(seed);
                 rng.shuffle(&mut branches);
-                eval_selection(ctx, lex, &branches)
+                while let Some(node) = branches.pop() {
+                    let result = node.eval(ctx, lex);
+                    if result.is_success() {
+                        return result;
+                    }
+                    if result.is_action() {
+                        if *check_any {
+                            for node in branches {
+                                if node.eval(ctx, lex).is_success() {
+                                    return Outcome::Success;
+                                }
+                            }
+                        }
+                        return result;
+                    }
+                }
+                Outcome::Failure
+                //eval_selection(ctx, lex, &branches)
             },
         }
     }

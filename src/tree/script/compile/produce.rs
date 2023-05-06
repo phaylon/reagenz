@@ -138,25 +138,29 @@ fn try_compile_branch_random<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
 ) -> ScriptResult<Option<Node<Ext>>> {
-    if let Some(seeds) = try_parse_keyword_directive(node, kw::dir::RANDOM)? {
-        let mut ctx_seeds = Vec::new();
-        for seed in seeds {
-            let Some(name) = match_sym(seed) else {
-                return Err(SourceError::new(
-                    ScriptError::InvalidSeedRef,
-                    seed.location.start(),
-                    "expected seed reference",
-                ));
-            };
-            let index = env.ids().resolve(name.as_str(), 0)
-                .map_err(|error| convert_id_error(&name, error))?;
-            ctx_seeds.push(index);
-        }
-        let branches = compile_branches(env, node.children())?;
-        Ok(Some(Node::Random(fastrand::u64(..), ctx_seeds.into(), branches)))
+    let (seeds, any) = if let Some(seeds) = try_parse_keyword_directive(node, kw::dir::RANDOM)? {
+        (seeds, false)
+    } else if let Some(seeds) = try_parse_keyword_directive(node, kw::dir::RANDOM_ANY)? {
+        (seeds, true)
     } else {
-        Ok(None)
+        return Ok(None);
+    };
+
+    let mut ctx_seeds = Vec::new();
+    for seed in seeds {
+        let Some(name) = match_sym(seed) else {
+            return Err(SourceError::new(
+                ScriptError::InvalidSeedRef,
+                seed.location.start(),
+                "expected seed reference",
+            ));
+        };
+        let index = env.ids().resolve(name.as_str(), 0)
+            .map_err(|error| convert_id_error(&name, error))?;
+        ctx_seeds.push(index);
     }
+    let branches = compile_branches(env, node.children())?;
+    Ok(Some(Node::Random(fastrand::u64(..), ctx_seeds.into(), branches, any)))
 }
 
 fn try_compile_branch_dispatch<Ctx, Ext, Eff>(
