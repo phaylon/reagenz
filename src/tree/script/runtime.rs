@@ -265,9 +265,9 @@ impl RefIdx {
         Ext: External,
         Eff: Effect,
     {
-        trace!("node: {}{:?}", ctx.tree().ids.ref_name(*self), arguments);
         let ctx = mode.apply(ctx);
-        ctx.cache().get(*self, arguments, ctx.is_active(), || {
+        let res = ctx.cache().get(*self, arguments, ctx.is_active(), || {
+            trace!("eval: {}{:?}", ctx.tree().ids.ref_name(*self), arguments);
             match self {
                 Self::Action(index) => {
                     ctx.tree().ids.get(*index).eval(ctx.as_ref(), arguments)
@@ -283,7 +283,9 @@ impl RefIdx {
                     node(ctx.view(), arguments, ctx.tree(), ctx.is_active())
                 },
             }
-        })
+        });
+        trace!("outcome: {}{:?} => {:?}", ctx.tree().ids.ref_name(*self), arguments, res);
+        res
     }
 }
 
