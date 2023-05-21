@@ -17,6 +17,9 @@ pub type ProtoValues<Ext> = Arc<[ProtoValue<Ext>]>;
 
 pub type Patterns<Ext> = Arc<[Pattern<Ext>]>;
 
+pub type CondBranches<Ext> = Arc<[(Node<Ext>, Node<Ext>)]>;
+pub type CondElseBranch<Ext> = Arc<Node<Ext>>;
+
 type Lex<Ext> = SmallVec<[Value<Ext>; 8]>;
 type Args<Ext> = SmallVec<[Value<Ext>; 4]>;
 
@@ -201,12 +204,14 @@ where
 
 #[derive(Debug, Clone)]
 pub enum Node<Ext> {
+    Success,
     Failure,
     Dispatch(Dispatch, Nodes<Ext>),
     Ref(RefIdx, RefMode, ProtoValues<Ext>),
     Query(Pattern<Ext>, QueryIdx, ProtoValues<Ext>, QueryMode, Nodes<Ext>),
     Match(ProtoValues<Ext>, Patterns<Ext>, Nodes<Ext>),
     Random(u64, Seeds, Nodes<Ext>, bool),
+    Cond(CondBranches<Ext>, Option<CondElseBranch<Ext>>),
 }
 
 impl<Ext> Node<Ext> {
@@ -218,6 +223,7 @@ impl<Ext> Node<Ext> {
     {
         match self {
             Self::Failure => Outcome::Failure,
+            Self::Success => Outcome::Success,
             Self::Dispatch(dispatch, branches) => {
                 dispatch.eval_branches(ctx, lex, branches)
             },
@@ -268,7 +274,26 @@ impl<Ext> Node<Ext> {
                     }
                 }
                 Outcome::Failure
-                //eval_selection(ctx, lex, &branches)
+            },
+            Self::Cond(branches, else_branch) => {
+                'branches: for (branch_cond, branch_body) in branches.iter() {
+                    match branch_cond.eval(ctx, lex) {
+                        Outcome::Success => {
+                            return branch_body.eval(ctx, lex);
+                        },
+                        Outcome::Failure => {
+                            continue 'branches;
+                        },
+                        other => {
+                            return other;
+                        },
+                    }
+                }
+                if let Some(else_branch) = else_branch.as_ref() {
+                    else_branch.eval(ctx, lex)
+                } else {
+                    Outcome::Failure
+                }
             },
         }
     }

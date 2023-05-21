@@ -33,4 +33,11 @@ pub mod dir {
         pub const SWITCH: &str = "switch";
         pub const CASE: &str = "case";
     }
+
+    pub mod cond {
+        pub const COND: &str = "cond";
+        pub const CASE: &str = "when";
+        pub const BODY: &str = "do";
+        pub const ELSE: &str = "else";
+    }
 }

@@ -260,6 +260,50 @@ fn try_compile_branch_ref<Ctx, Ext, Eff>(
     Ok(None)
 }
 
+fn try_compile_branch_cond<Ctx, Ext, Eff>(
+    env: &mut Env<'_, Ctx, Ext, Eff>,
+    node: &ScriptNode,
+) -> ScriptResult<Option<Node<Ext>>> {
+    if try_parse_label_directive(node, kw::dir::cond::COND)? {
+        let mut branches = Vec::new();
+        let mut else_branch = None;
+        let mut children = node.children();
+        while !children.is_empty() {
+            if else_branch.is_some() {
+                return Err(SourceError::new(
+                    ScriptError::InvalidCondNodeAfterElse,
+                    children[0].location,
+                    "unexpected condition node after `else` clause",
+                ));
+            }
+            if try_parse_label_directive(&children[0], kw::dir::cond::CASE)? {
+                let case = Node::sequence(compile_branches(env, children[0].children())?);
+                children = &children[1..];
+                let mut body = Node::Success;
+                if !children.is_empty() {
+                    if try_parse_label_directive(&children[0], kw::dir::cond::BODY)? {
+                        body = Node::sequence(compile_branches(env, children[0].children())?);
+                        children = &children[1..];
+                    }
+                }
+                branches.push((case, body));
+            } else if try_parse_label_directive(&children[0], kw::dir::cond::ELSE)? {
+                let branch = Node::sequence(compile_branches(env, children[0].children())?);
+                children = &children[1..];
+                else_branch = Some(branch.into());
+            } else {
+                return Err(SourceError::new(
+                    ScriptError::InvalidCondNode,
+                    children[0].location,
+                    "expected condition node",
+                ));
+            }
+        }
+        return Ok(Some(Node::Cond(branches.into(), else_branch)));
+    }
+    Ok(None)
+}
+
 fn try_compile_branch_switch<Ctx, Ext, Eff>(
     env: &mut Env<'_, Ctx, Ext, Eff>,
     node: &ScriptNode,
@@ -378,6 +422,8 @@ fn compile_branch<Ctx, Ext, Eff>(
     } else if let Some(compiled) = try_compile_branch_query(env, node)? {
         Ok(compiled)
     } else if let Some(compiled) = try_compile_branch_random(env, node)? {
+        Ok(compiled)
+    } else if let Some(compiled) = try_compile_branch_cond(env, node)? {
         Ok(compiled)
     } else {
         Err(SourceError::new(ScriptError::UnrecognizedNode, node.location, "expected logic node"))

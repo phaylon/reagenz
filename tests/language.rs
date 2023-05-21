@@ -158,6 +158,75 @@ fn queries() {
 }
 
 #[test]
+fn cond_cases() {
+    let mut tree = BehaviorTreeBuilder::<(), (), i32>::default();
+    tree.register_condition("fail", cond_fn!(_ => false));
+    tree.register_condition("eq", cond_fn!(_, a: i32, b: i32 => a == b));
+    tree.register_effect("emit-value", effect_fn!(_, value: i32 => {
+        Some(value)
+    }));
+    let tree = tree.compile_str(INDENT, "test", &normalize("
+        |action: emit $value
+        |  effects:
+        |    emit-value $value
+        |node: test $value
+        |  cond:
+        |    when:
+        |      eq $value 1
+        |    do:
+        |      emit 10
+        |    when:
+        |      eq $value 2
+        |    do:
+        |      emit 20
+        |    else:
+        |      emit 30
+        |node: test-fail
+        |  cond:
+        |    when:
+        |      eq 1 1
+        |    do:
+        |      fail
+        |    else:
+        |      emit 66
+        |node: test-action
+        |  cond:
+        |    when:
+        |      emit 23
+        |    else:
+        |      emit 66
+    ")).unwrap();
+    assert_matches!(
+        tree.evaluate(&(), "test", [1]),
+        Ok(Outcome::Action(action)) => {
+            assert_eq!(action.effects(), &[10]);
+        }
+    );
+    assert_matches!(
+        tree.evaluate(&(), "test", [2]),
+        Ok(Outcome::Action(action)) => {
+            assert_eq!(action.effects(), &[20]);
+        }
+    );
+    assert_matches!(
+        tree.evaluate(&(), "test", [3]),
+        Ok(Outcome::Action(action)) => {
+            assert_eq!(action.effects(), &[30]);
+        }
+    );
+    assert_matches!(
+        tree.evaluate(&(), "test-fail", ()),
+        Ok(Outcome::Failure)
+    );
+    assert_matches!(
+        tree.evaluate(&(), "test-action", ()),
+        Ok(Outcome::Action(action)) => {
+            assert_eq!(action.effects(), &[23]);
+        }
+    );
+}
+
+#[test]
 fn switch_cases() {
     let mut tree = BehaviorTreeBuilder::<&[[i32; 2]], (), i32>::default();
     tree.register_condition("fail", cond_fn!(_ => false));
