@@ -41,7 +41,10 @@ where
             RefIdx::Action(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
             RefIdx::Node(index) => Ok(self.ids.get(index).eval(&ctx, &arguments)),
             RefIdx::Cond(index) => Ok(self.ids.get(index)(ctx.view(), &arguments).into()),
-            RefIdx::Custom(index) => Ok(self.ids.get(index)(ctx.view(), &arguments, self, true)),
+            RefIdx::Custom(index) => {
+                let seed = index.as_seed();
+                Ok(self.ids.get(index)(ctx.view(), &arguments, self, ctx.is_active(), seed))
+            },
         }
     }
 

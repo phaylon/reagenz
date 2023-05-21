@@ -280,7 +280,7 @@ impl RefIdx {
                 },
                 Self::Custom(index) => {
                     let node = ctx.tree().ids.get(*index);
-                    node(ctx.view(), arguments, ctx.tree(), ctx.is_active())
+                    node(ctx.view(), arguments, ctx.tree(), ctx.is_active(), index.as_seed())
                 },
             }
         });
@@ -318,19 +318,6 @@ where
     Eff: Effect,
 {
     Dispatch::Sequence.eval_branches(ctx, lex, nodes)
-}
-
-fn eval_selection<C, Ctx, Ext, Eff>(
-    ctx: &C,
-    lex: &mut Lex<Ext>,
-    nodes: &[Node<Ext>],
-) -> Outcome<Ext, Eff>
-where
-    C: Context<Ctx, Ext, Eff>,
-    Ext: External,
-    Eff: Effect,
-{
-    Dispatch::Selection.eval_branches(ctx, lex, nodes)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

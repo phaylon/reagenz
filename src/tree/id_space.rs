@@ -23,6 +23,7 @@ pub type CustomFn<Ctx, Ext, Eff> = fn(
     &[Value<Ext>],
     &BehaviorTree<Ctx, Ext, Eff>,
     bool,
+    u64,
 ) -> Outcome<Ext, Eff>;
 pub type SeedFn<Ctx> = fn(&Ctx) -> u64;
 
@@ -36,6 +37,11 @@ macro_rules! generate {
         $(
             #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
             pub struct $index(Index);
+
+            impl $index {
+                #[allow(unused)]
+                pub fn as_seed(&self) -> u64 { self.0.as_seed() }
+            }
 
             impl From<$index> for Index {
                 fn from(index: $index) -> Self {

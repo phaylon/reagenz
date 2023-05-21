@@ -7,6 +7,12 @@ use smol_str::SmolStr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Index(usize);
 
+impl Index {
+    pub fn as_seed(&self) -> u64 {
+        self.0 as u64
+    }
+}
+
 #[derive(Derivative, Clone)]
 #[derivative(Default(bound=""))]
 pub struct IdMap<N, D> {
