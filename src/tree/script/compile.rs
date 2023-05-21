@@ -69,6 +69,8 @@ pub enum ScriptError {
     InvalidQueryRef,
     #[error("Invalid effect reference")]
     InvalidEffectRef,
+    #[error("Invalid action reference")]
+    InvalidActionRef,
     #[error("Invalid seed reference")]
     InvalidSeedRef,
     #[error("Invalid switch case node")]

@@ -22,6 +22,65 @@ fn globals() {
 }
 
 #[test]
+fn action_inheritance() {
+    let mut tree = BehaviorTreeBuilder::<(), (), i32>::default();
+    tree.register_condition("fail", cond_fn!(_ => false));
+    tree.register_effect("emit-value", effect_fn!(_, value: i32 => {
+        Some(value)
+    }));
+    let tree = tree.compile_str(INDENT, "test", &normalize("
+        |action: success $value
+        |  effects:
+        |    emit-value $value
+        |action: failure
+        |  conditions:
+        |    fail
+        |action: test-required-success $value
+        |  required:
+        |    success $value
+        |  effects:
+        |    emit-value 23
+        |action: test-required-failure
+        |  required:
+        |    failure
+        |  effects:
+        |    emit-value 23
+        |action: test-optional-success $value
+        |  optional:
+        |    success $value
+        |  effects:
+        |    emit-value 23
+        |action: test-optional-failure
+        |  optional:
+        |    failure
+        |  effects:
+        |    emit-value 23
+    ")).unwrap();
+    assert_matches!(
+        tree.evaluate(&(), "test-required-success", [42]),
+        Ok(Outcome::Action(action)) => {
+            assert_matches!(action.effects(), [23, 42]);
+        }
+    );
+    assert_matches!(
+        tree.evaluate(&(), "test-required-failure", ()),
+        Ok(Outcome::Failure)
+    );
+    assert_matches!(
+        tree.evaluate(&(), "test-optional-success", [42]),
+        Ok(Outcome::Action(action)) => {
+            assert_matches!(action.effects(), [23, 42]);
+        }
+    );
+    assert_matches!(
+        tree.evaluate(&(), "test-optional-failure", ()),
+        Ok(Outcome::Action(action)) => {
+            assert_matches!(action.effects(), [23]);
+        }
+    );
+}
+
+#[test]
 fn effects() {
     let mut tree = BehaviorTreeBuilder::<i32, (), i32>::default();
     tree.register_effect("emit-value", effect_fn!(ctx, value: i32 => {

@@ -26,6 +26,8 @@ type Seeds = Arc<[SeedIdx]>;
 pub struct ActionRoot<Ext> {
     pub index: Option<ActionIdx>,
     pub effects: Arc<[(EffectIdx, ProtoValues<Ext>)]>,
+    pub inherit_required: Arc<[(ActionIdx, ProtoValues<Ext>)]>,
+    pub inherit_optional: Arc<[(ActionIdx, ProtoValues<Ext>)]>,
     pub conditions: Nodes<Ext>,
     pub discovery: Nodes<Ext>,
     pub lexicals: usize,
@@ -60,13 +62,34 @@ where
         if !self.conditions_ok(ctx, &mut lex) {
             return Outcome::Failure;
         }
-        let mut effects = SmallVec::<[Eff; 16]>::with_capacity(self.effects.len());
+        let mut effects = SmallVec::<[Eff; 32]>::with_capacity(self.effects.len());
         for (index, arguments) in self.effects.iter() {
             let arguments: Args<Ext> = reify_values(ctx, &mut lex, arguments.iter());
             if let Some(effect) = ctx.tree().ids.get(*index)(ctx.view(), &arguments) {
                 effects.push(effect);
             } else {
                 return Outcome::Failure;
+            }
+        }
+        for (index, arguments) in self.inherit_required.iter() {
+            let arguments: Args<Ext> = reify_values(ctx, &mut lex, arguments.iter());
+            match ctx.tree().ids.get(*index).eval(ctx, &arguments) {
+                Outcome::Success => (),
+                Outcome::Failure => {
+                    return Outcome::Failure;
+                },
+                Outcome::Action(action) => {
+                    effects.extend(action.effects().iter().cloned());
+                },
+            }
+        }
+        for (index, arguments) in self.inherit_optional.iter() {
+            let arguments: Args<Ext> = reify_values(ctx, &mut lex, arguments.iter());
+            match ctx.tree().ids.get(*index).eval(ctx, &arguments) {
+                Outcome::Success | Outcome::Failure => (),
+                Outcome::Action(action) => {
+                    effects.extend(action.effects().iter().cloned());
+                },
             }
         }
         ctx.action(Action::new(
@@ -95,6 +118,8 @@ impl<Ext> Default for ActionRoot<Ext> {
         Self {
             index: None,
             effects: Arc::new([]),
+            inherit_required: Arc::new([]),
+            inherit_optional: Arc::new([]),
             conditions: Arc::new([]),
             discovery: Arc::new([]),
             lexicals: 0,
@@ -441,6 +466,7 @@ impl QueryMode {
                 let query_fn = ctx.tree().ids.get(index);
                 query_fn(ctx.view(), arguments, &mut |iter| {
                     'values: for topic_value in iter {
+                        lex.truncate(lex_len);
                         if !pattern.try_apply(ctx, &mut lex, &topic_value) {
                             continue 'values;
                         }
@@ -454,6 +480,7 @@ impl QueryMode {
                 query_fn(ctx.view(), arguments, &mut |iter| {
                     let mut last = Outcome::Failure;
                     'values: for topic_value in iter {
+                        lex.truncate(lex_len);
                         if !pattern.try_apply(ctx, &mut lex, &topic_value) {
                             continue 'values;
                         }
