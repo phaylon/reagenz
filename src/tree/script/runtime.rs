@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use fastrand::Rng;
@@ -7,7 +8,7 @@ use smallvec::SmallVec;
 
 use crate::tree::{RefIdx, SeedIdx, External, Effect};
 use crate::{Outcome, Action};
-use crate::tree::context::Context;
+use crate::tree::context::{Context, DiscoveryContext};
 use crate::tree::id_space::{EffectIdx, GlobalIdx, QueryIdx, ActionIdx, NodeIdx};
 use crate::value::Value;
 
@@ -29,8 +30,9 @@ type Seeds = Arc<[SeedIdx]>;
 pub struct ActionRoot<Ext> {
     pub index: Option<ActionIdx>,
     pub effects: Arc<[(EffectIdx, ProtoValues<Ext>)]>,
-    pub inherit_required: Arc<[(ActionIdx, ProtoValues<Ext>)]>,
-    pub inherit_optional: Arc<[(ActionIdx, ProtoValues<Ext>)]>,
+    pub inherit: Nodes<Ext>,
+    //pub inherit_required: Arc<[(ActionIdx, ProtoValues<Ext>)]>,
+    //pub inherit_optional: Arc<[(ActionIdx, ProtoValues<Ext>)]>,
     pub conditions: Nodes<Ext>,
     pub discovery: Nodes<Ext>,
     pub lexicals: usize,
@@ -74,26 +76,17 @@ where
                 return Outcome::Failure;
             }
         }
-        for (index, arguments) in self.inherit_required.iter() {
-            let arguments: Args<Ext> = reify_values(ctx, &mut lex, arguments.iter());
-            match ctx.tree().ids.get(*index).eval(ctx, &arguments) {
-                Outcome::Success => (),
-                Outcome::Failure => {
-                    return Outcome::Failure;
-                },
-                Outcome::Action(action) => {
-                    effects.extend(action.effects().iter().cloned());
-                },
+        let mut inherited = Vec::new();
+        let collection = RefCell::new(&mut inherited);
+        let discovery_ctx = DiscoveryContext::from_context(ctx, &collection, None);
+        for node in self.inherit.iter() {
+            let result = node.eval(&discovery_ctx, &mut lex);
+            if result.is_failure() {
+                return Outcome::Failure;
             }
         }
-        for (index, arguments) in self.inherit_optional.iter() {
-            let arguments: Args<Ext> = reify_values(ctx, &mut lex, arguments.iter());
-            match ctx.tree().ids.get(*index).eval(ctx, &arguments) {
-                Outcome::Success | Outcome::Failure => (),
-                Outcome::Action(action) => {
-                    effects.extend(action.effects().iter().cloned());
-                },
-            }
+        for action in inherited {
+            effects.extend(action.effects().iter().cloned());
         }
         ctx.action(Action::new(
             self.index.unwrap(),
@@ -121,8 +114,7 @@ impl<Ext> Default for ActionRoot<Ext> {
         Self {
             index: None,
             effects: Arc::new([]),
-            inherit_required: Arc::new([]),
-            inherit_optional: Arc::new([]),
+            inherit: Arc::new([]),
             conditions: Arc::new([]),
             discovery: Arc::new([]),
             lexicals: 0,

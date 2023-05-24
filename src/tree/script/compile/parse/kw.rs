@@ -7,8 +7,7 @@ pub mod def {
         pub const CONDITIONS: &str = "conditions";
         pub const EFFECTS: &str = "effects";
         pub const DISCOVERY: &str = "discovery";
-        pub const INHERIT_REQUIRED: &str = "required";
-        pub const INHERIT_OPTIONAL: &str = "optional";
+        pub const INHERIT: &str = "inherit";
     }
 }
 

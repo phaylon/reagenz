@@ -95,7 +95,7 @@ pub struct DiscoveryContext<'ctx, 'coll, Ctx, Ext, Eff, C> {
     view: &'ctx Ctx,
     tree: &'ctx BehaviorTree<Ctx, Ext, Eff>,
     collection: &'ctx RefCell<&'coll mut C>,
-    index: ActionIdx,
+    index: Option<ActionIdx>,
     cache: ContextCache<Ext, Eff>,
 }
 
@@ -116,10 +116,24 @@ impl<'ctx, 'coll, Ctx, Ext, Eff, C> DiscoveryContext<'ctx, 'coll, Ctx, Ext, Eff,
         view: &'ctx Ctx,
         tree: &'ctx BehaviorTree<Ctx, Ext, Eff>,
         collection: &'ctx RefCell<&'coll mut C>,
-        index: ActionIdx,
+        index: Option<ActionIdx>,
         cache: ContextCache<Ext, Eff>,
     ) -> Self {
         Self { view, tree, collection, index, cache }
+    }
+
+    pub fn from_context(
+        ctx: &'ctx impl Context<Ctx, Ext, Eff>,
+        collection: &'ctx RefCell<&'coll mut C>,
+        index: Option<ActionIdx>,
+    ) -> Self {
+        Self {
+            view: ctx.view(),
+            tree: ctx.tree(),
+            collection,
+            index,
+            cache: ctx.cache().clone(),
+        }
     }
 }
 
@@ -149,7 +163,7 @@ where
     }
 
     fn action(&self, action: Action<Ext, Eff>) -> Outcome<Ext, Eff> {
-        if self.index == action.index() {
+        if self.index.map_or(true, |index| index == action.index()) {
             self.collection.borrow_mut().extend([action]);
             Outcome::Success
         } else {

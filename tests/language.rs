@@ -24,6 +24,7 @@ fn globals() {
 #[test]
 fn action_inheritance() {
     let mut tree = BehaviorTreeBuilder::<(), (), i32>::default();
+    tree.register_condition("ok", cond_fn!(_ => true));
     tree.register_condition("fail", cond_fn!(_ => false));
     tree.register_effect("emit-value", effect_fn!(_, value: i32 => {
         Some(value)
@@ -36,23 +37,25 @@ fn action_inheritance() {
         |  conditions:
         |    fail
         |action: test-required-success $value
-        |  required:
+        |  inherit:
         |    success $value
         |  effects:
         |    emit-value 23
         |action: test-required-failure
-        |  required:
+        |  inherit:
         |    failure
         |  effects:
         |    emit-value 23
         |action: test-optional-success $value
-        |  optional:
+        |  inherit:
         |    success $value
         |  effects:
         |    emit-value 23
         |action: test-optional-failure
-        |  optional:
-        |    failure
+        |  inherit:
+        |    select:
+        |      failure
+        |      ok
         |  effects:
         |    emit-value 23
     ")).unwrap();

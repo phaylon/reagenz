@@ -61,15 +61,13 @@ fn compile_action_root<Ctx, Ext, Eff>(
     let mut conditions = Vec::new();
     let mut effects = Vec::new();
     let mut discovery = Vec::new();
-    let mut inherit_required = Vec::new();
-    let mut inherit_optional = Vec::new();
+    let mut inherit = Vec::new();
 
     'children: for child in children {
         for (keyword, collection) in [
             (kw::def::action::CONDITIONS, &mut conditions),
             (kw::def::action::EFFECTS, &mut effects),
-            (kw::def::action::INHERIT_REQUIRED, &mut inherit_required),
-            (kw::def::action::INHERIT_OPTIONAL, &mut inherit_optional),
+            (kw::def::action::INHERIT, &mut inherit),
             (kw::def::action::DISCOVERY, &mut discovery),
         ] {
             if try_parse_label_directive(child, keyword)? {
@@ -90,14 +88,12 @@ fn compile_action_root<Ctx, Ext, Eff>(
     env.scope(parameters.iter(), |env| {
         let conditions = compile_branches(env, &conditions)?;
         let effects = compile_effects(env, &effects)?;
-        let inherit_required = compile_actions(env, &inherit_required)?;
-        let inherit_optional = compile_actions(env, &inherit_optional)?;
+        let inherit = compile_branches(env, &inherit)?;
         let lexicals = env.max_vars();
         Ok(ActionRoot {
             index: Some(index),
             effects,
-            inherit_required,
-            inherit_optional,
+            inherit,
             conditions,
             discovery,
             lexicals,
@@ -127,35 +123,6 @@ fn compile_effect<Ctx, Ext, Eff>(
             ScriptError::InvalidEffectRef,
             node.location,
             "expected effect reference",
-        ))?;
-    let index = env.ids().resolve(&name, arguments.len())
-        .map_err(|error| convert_id_error(&name, error))?;
-    let arguments = compile_values(env, arguments)?;
-    Ok((index, arguments))
-}
-
-fn compile_actions<Ctx, Ext, Eff>(
-    env: &mut Env<'_, Ctx, Ext, Eff>,
-    nodes: &[ScriptNode],
-) -> ScriptResult<Arc<[(ActionIdx, ProtoValues<Ext>)]>> {
-    let mut compiled = Vec::new();
-    for node in nodes {
-        compiled.push(compile_action(env, node)?);
-    }
-    Ok(compiled.into())
-}
-
-fn compile_action<Ctx, Ext, Eff>(
-    env: &mut Env<'_, Ctx, Ext, Eff>,
-    node: &ScriptNode,
-) -> ScriptResult<(ActionIdx, ProtoValues<Ext>)> {
-    let (name, arguments) = node.statement()
-        .and_then(|stmt| match_ref(&stmt.signature))
-        .filter(|(name, _)| matches!(name, RefClass::Raw(_)))
-        .ok_or(SourceError::new(
-            ScriptError::InvalidActionRef,
-            node.location,
-            "expected action reference",
         ))?;
     let index = env.ids().resolve(&name, arguments.len())
         .map_err(|error| convert_id_error(&name, error))?;
